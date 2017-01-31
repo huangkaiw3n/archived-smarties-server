@@ -121,13 +121,13 @@ server.post('/v1/parkcar', async (req, res) => {
       jwtParkingSessions = decodedToken.parkingSessions;
     }
   } catch (err) {
-    return res.json(401, { message: 'Invalid jwt provided'});
+    return res.json(400, { message: 'Invalid jwt provided'});
   }
 
   // validate the json body data
   var valid = postParkCarValidator(data);
   if (!valid) {
-    return res.json(401, { message: 'Malformed params provided!' });
+    return res.json(400, { message: 'Malformed params provided!' });
   }
 
   // Querying the carpark
