@@ -192,7 +192,7 @@ server.post('/v1/parkcar', async (req, res) => {
   }
 
   // Price algo mismatch or timing differences
-  if (Math.ceil(totalPrice) !== data.expectedPrice) {
+  if (totalPrice !== data.expectedPrice) {
     return res.json(409, {
       message: `Price calculation mismatch, Client Expected Price: ${data.expectedPrice}. Server Expected Price: ${totalPrice}`
     });

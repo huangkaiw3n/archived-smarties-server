@@ -81,6 +81,6 @@ module.exports = {
       currentMoment.add(accountedDuration);
       remainingDuration = remainingDuration - accountedDuration;
     }
-    return [startMoment, endMoment.add(chargedDuration), chargedDuration, totalPrice];
+    return [startMoment, endMoment.add(chargedDuration), chargedDuration, Math.ceil(totalPrice)];
   }
 }
