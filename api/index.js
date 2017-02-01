@@ -111,7 +111,7 @@ const postParkCarValidator = validateParkCarBody.compile(postParkCarBodySchema);
 server.post('/v1/parkcar', async (req, res) => {
   let data = req.body;
   let token = req.headers['smarties-jwt'];
-  console.log("token",token);
+  console.log("Smarties-jwt token:",token);
   let decodedToken;
   let jwtParkingSessions; // previous sessions from jwt
 
@@ -232,11 +232,13 @@ server.post('/v1/parkcar', async (req, res) => {
     }]
   };
 
+  console.log(`Parking to ${data.carpark_code}, LP: ${data.license_plate} VT: ${data.vehicle_type} LOT: ${data.lot_number}`)
+
   try {
     // Insert into parking session table
     let insertedParking = await putParkingSession(parkingSession);
 
-    console.log("insertedParking obj: ", insertedParking);
+    console.log("Inserted Parking Session");
 
     // Publish on Firebase
     if (!jwtParkingSessions){
@@ -253,6 +255,8 @@ server.post('/v1/parkcar', async (req, res) => {
       });
     }
 
+    console.log("Published on Firebase");
+
     // Charge via stripe
     let chargeOptions = {
       value: totalPrice,
@@ -268,6 +272,8 @@ server.post('/v1/parkcar', async (req, res) => {
     }
 
     let stripeCharge = await Payment.chargeCard(chargeOptions);
+
+    console.log(`Charged ${totalPrice} via Stripe`);
 
     let completedChargeTimestamp = Date.now();
 
@@ -288,10 +294,14 @@ server.post('/v1/parkcar', async (req, res) => {
 
     let insertedTransaction = await putTransaction(transaction);
 
+    console.log("Inserted Transaction");
+
     await updateParkingSession(parkingSession.date_carpark_code,
                                parkingSession.timestamp_parking_id,
                                {"status": "completed_payment","timestamp": completedChargeTimestamp},
                                transaction.transaction_id);
+
+    console.log("Updated Parking Session");
 
     parkingSession = _.assign(parkingSession,
       {
@@ -302,7 +312,7 @@ server.post('/v1/parkcar', async (req, res) => {
 
   } catch (err) {
     console.log(err);
-    console.log(parkingSession);
+    console.log("Error Session:", parkingSession);
     return res.json(409, {message: err});
   }
 

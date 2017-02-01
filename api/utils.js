@@ -52,7 +52,6 @@ module.exports = {
                                               '[)'
                                             );
                                           });
-      console.log("CurrentBlock:", currentRateBlock);
       if (!currentRateBlock) break;
       let currentRateInCentsPerMin = currentRateBlock.parking_block_duration ?
                               currentRateBlock.parking_rate * 100 / currentRateBlock.parking_block_duration : 0;
