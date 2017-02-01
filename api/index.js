@@ -79,7 +79,7 @@ const postParkCarBodySchema = {
 };
 // load schema into the validator
 var validateParkCarBody = new jsonv();
-validateParkCarBody.addFormat('carplate', /^(\D{1,3})(\d{1,5})(\D{1,2})$/);
+validateParkCarBody.addFormat('carplate', /^([A-Z]|[a-z]{1,3})(\d{1,5})([A-Z]|[a-z]{1,2})$/;);
 const postParkCarValidator = validateParkCarBody.compile(postParkCarBodySchema);
 
 
@@ -260,7 +260,7 @@ server.post('/v1/parkcar', async (req, res) => {
     // Charge via stripe
     let chargeOptions = {
       value: totalPrice,
-      description: `Carpark:${data.carpark_code} Date:${moment().utcOffset(8).format('Do MMM YY, h:mm')}`,
+      description: `Carpark:${data.carpark_code} Date:${moment().utcOffset(8).format('Do MMM YY, h:mmA')}`,
       statement_descriptor: `CP-${data.carpark_code} LP-${data.license_plate}`,
       idempotencyKey: `charge_${parkingSession.timestamp_parking_id}`,
     };
