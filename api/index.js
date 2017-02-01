@@ -79,7 +79,7 @@ const postParkCarBodySchema = {
 };
 // load schema into the validator
 var validateParkCarBody = new jsonv();
-validateParkCarBody.addFormat('carplate', /^([A-Z]|[a-z]{1,3})(\d{1,5})([A-Z]|[a-z]{1,2})$/;);
+validateParkCarBody.addFormat('carplate', /^([a-zA-Z]{1,3})(\d{1,5})([a-zA-Z]{1,2})$/);
 const postParkCarValidator = validateParkCarBody.compile(postParkCarBodySchema);
 
 
