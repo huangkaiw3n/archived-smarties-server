@@ -256,7 +256,7 @@ server.post('/v1/parkcar', async (req, res) => {
     // Charge via stripe
     let chargeOptions = {
       value: totalPrice,
-      description: `CP-${data.carpark_code} LP-${data.license_plate}`,
+      description: `Carpark:${data.carpark_code} Date:${moment().utcOffset(8).format('Do MMM YY, h:mm')}`,
       statement_descriptor: `CP-${data.carpark_code} LP-${data.license_plate}`,
       idempotencyKey: `charge_${parkingSession.timestamp_parking_id}`,
     };
