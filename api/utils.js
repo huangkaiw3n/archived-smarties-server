@@ -39,15 +39,24 @@ module.exports = {
                                             let [start_hour, start_minute] = r.start_time.split(':');
                                             let [end_hour, end_minute] = r.end_time.split(':');
                                             // '[)' indicates an inclusive start and exclusive end
+                                            let rateBlockStart = moment(currentMoment).set({
+                                              "hour": start_hour,
+                                              "minute": start_minute,
+                                            });
+                                            let rateBlockEnd = moment(currentMoment).set({
+                                              "hour": end_hour,
+                                              "minute": end_minute,
+                                            });
+                                            if (rateBlockEnd < rateBlockStart) { // this accounts for overnight blocks
+                                              if (currentMoment.format('A') === "AM") {
+                                                rateBlockStart.subtract(1, 'days');
+                                              } else {
+                                                rateBlockEnd.add(1, 'days');
+                                              }
+                                            }
                                             return currentMoment.isBetween(
-                                              moment(currentMoment).set({
-                                                "hour": start_hour,
-                                                "minute": start_minute,
-                                              }),
-                                              moment(currentMoment).set({
-                                                "hour": end_hour,
-                                                "minute": end_minute,
-                                              }),
+                                              rateBlockStart,
+                                              rateBlockEnd,
                                               null,
                                               '[)'
                                             );
