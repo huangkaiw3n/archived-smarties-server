@@ -315,7 +315,7 @@ server.post('/v1/parkcar', async (req, res) => {
   } catch (err) {
     console.log(err);
     console.log("Error Session:", parkingSession);
-    return res.json(409, {message: err});
+    return res.json(409, {error: err});
   }
 
   let jwtPayload;
