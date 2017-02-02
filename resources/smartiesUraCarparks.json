@@ -21455,6 +21455,47 @@
     ]
   },
   {
+    "carpark_code": "THM",
+    "pp_code": "THM",
+    "carpark_name": "Blk 37B Commonwealth Drive MSCP",
+    "carpark_location": [
+      {
+        "lat": 1.298263,
+        "eastings": 24056.780108980187,
+        "lng": 103.797887,
+        "northings": 31180.872663093454
+      },
+      {
+        "lat": 1.298533,
+        "eastings": 24080.930699546643,
+        "lng": 103.798104,
+        "northings": 31210.727539694846
+      },
+      {
+        "lat": 1.298305,
+        "eastings": 24079.70614590859,
+        "lng": 103.798093,
+        "northings": 31185.516487084555
+      }
+    ],
+    "carpark_structure_type": "surface",
+    "parking_types": [
+      {
+        "vehicle_type": "car",
+        "parking_type": "short_term",
+        "rate_code": [
+          "01B79TPND32PRF0VTW96HFYKJE",
+          "01B79TPND4TZEA62970T99F04M",
+          "01B79TPND4JR0HQZ0PZWWF7AEA",
+          "01B79TPND4EFWCTT30DMJP2AQN",
+          "01B79TPND4FFEV2WXTFWTS9Y6R",
+          "01B79TPND4Z9G3BVZFGPY6BENA",
+          "01B79TPND4WZHVTG7WKGDJCVQ6",
+        ]
+      }
+    ]
+  },
+  {
     "carpark_code": "U0002",
     "pp_code": "U0002",
     "carpark_name": "Upper Circular Road",
