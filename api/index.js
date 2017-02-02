@@ -194,7 +194,7 @@ server.post('/v1/parkcar', async (req, res) => {
   // Price algo mismatch or timing differences
   let priceDiff = Math.abs(totalPrice - data.expectedPrice);
 
-  if (priceDiff < 10) { //Allow price diff of 10 cents
+  if (priceDiff > 10) { //Allow price diff of 10 cents
     return res.json(409, {
       message: `Price calculation mismatch, Client Expected Price: ${data.expectedPrice}. Server Expected Price: ${totalPrice}`
     });
