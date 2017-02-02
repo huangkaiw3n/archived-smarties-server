@@ -34,16 +34,18 @@ module.exports = {
 
     while (chargedDuration < duration) {
       let currentRateDay = currentMoment.isoWeekday();
+      let rateBlockStart;
+      let rateBlockEnd;
       let currentRateBlock = _(rate_codes).filter((r) => currentRateDay >= r.start_day_of_week && currentRateDay <= r.end_day_of_week)
                                           .find((r) => {
                                             let [start_hour, start_minute] = r.start_time.split(':');
                                             let [end_hour, end_minute] = r.end_time.split(':');
                                             // '[)' indicates an inclusive start and exclusive end
-                                            let rateBlockStart = moment(currentMoment).set({
+                                            rateBlockStart = moment(currentMoment).set({
                                               "hour": start_hour,
                                               "minute": start_minute,
                                             });
-                                            let rateBlockEnd = moment(currentMoment).set({
+                                            rateBlockEnd = moment(currentMoment).set({
                                               "hour": end_hour,
                                               "minute": end_minute,
                                             });
@@ -67,10 +69,7 @@ module.exports = {
       console.log(`currentRateInCentsPerMin: ${currentRateInCentsPerMin}`);
       let accountedDuration = _.min([
                               moment(currentMoment).add(remainingDuration),
-                              moment(currentMoment).set({
-                                 "hour": currentRateBlock.end_time.split(':')[0],
-                                 "minute": currentRateBlock.end_time.split(':')[1],
-                              })
+                              rateBlockEnd
                             ]) - currentMoment;
       totalPrice = totalPrice + (Math.ceil(accountedDuration / 60000) * currentRateInCentsPerMin);
       console.log(`totalPrice: ${totalPrice}`);
