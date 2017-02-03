@@ -13,71 +13,71 @@ _ = require('lodash');
 var fs = require('fs');
 var ulid = require('ulid');
 var moment = require('moment');
-var utils = require('./utils');
+var utils = require('../api/utils');
 var Promise = require("bluebird");
 var AWS = require('aws-sdk');
 
 // DynamoDB Modules
-var docClient = new AWS.DynamoDB.DocumentClient({region: 'ap-southeast-1'});
+var docClient = new AWS.DynamoDB.DocumentClient({region: 'us-west-2'});
 Promise.promisifyAll(Object.getPrototypeOf(docClient));
 // the document client doesn't have methods for table/database level operations
-var dynamoDB = new AWS.DynamoDB({region: 'ap-southeast-1'});
+var dynamoDB = new AWS.DynamoDB({region: 'us-west-2'});
 Promise.promisifyAll(Object.getPrototypeOf(dynamoDB));
 
-var uraCarparks = require('../resources/ura_ppcode_ratescode.json');
-var carparks = require('../resources/carparksEdited.json');
-var smartiesUraCarparkRates = require('../resources/smartiesUraCarparkRates.json');
-var uraGroupedCarparks = require('../resources/uraGroupedCarparks.json');
+// var uraCarparks = require('../resources/ura_ppcode_ratescode.json');
+// var carparks = require('../resources/carparksEdited.json');
+// var smartiesUraCarparkRates = require('../resources/smartiesUraCarparkRates.json');
+// var uraGroupedCarparks = require('../resources/uraGroupedCarparks.json');
 var smartiesUraCarparksDump = require('../resources/smartiesUraCarparks.json');
 
-function fetchRateCodes(ref_rate_code) {
-  let rateCodes = [];
-  _.forEach(smartiesUraCarparkRates, (rate) => {
-    if (rate.ref_rate_code === ref_rate_code) {
-      rateCodes.push(rate.rate_code);
-    }
-  });
-  return rateCodes;
-}
-
-function fetchLocations(ref_rate_code) {
-  // console.log(`finding equals to ${ref_rate_code}`);
-  let carparkFound = _.find(carparks.carparks, (cp) => cp.pp_code === ref_rate_code);
-
-  if (carparkFound) {
-    return carparkFound.coordinates;
-  } else {
-    return null;
-  }
-}
-
-function structureType(structure_type) {
-  switch (structure_type){
-    case 'K':
-      return "kerbside";
-    case 'S':
-      return "surface";
-    case 'B':
-      return "building";
-    default:
-      return structure_type;
-  }
-}
-
-function vehicleType(vehicle_type) {
-  switch (vehicle_type){
-    case 'C':
-      return "car";
-    case 'M':
-      return "motorcycle";
-    case 'H':
-      return "heavy_vehicle";
-    case 'T':
-      return "trailer";
-    default:
-      return vehicle_type;
-  }
-}
+// function fetchRateCodes(ref_rate_code) {
+//   let rateCodes = [];
+//   _.forEach(smartiesUraCarparkRates, (rate) => {
+//     if (rate.ref_rate_code === ref_rate_code) {
+//       rateCodes.push(rate.rate_code);
+//     }
+//   });
+//   return rateCodes;
+// }
+//
+// function fetchLocations(ref_rate_code) {
+//   // console.log(`finding equals to ${ref_rate_code}`);
+//   let carparkFound = _.find(carparks.carparks, (cp) => cp.pp_code === ref_rate_code);
+//
+//   if (carparkFound) {
+//     return carparkFound.coordinates;
+//   } else {
+//     return null;
+//   }
+// }
+//
+// function structureType(structure_type) {
+//   switch (structure_type){
+//     case 'K':
+//       return "kerbside";
+//     case 'S':
+//       return "surface";
+//     case 'B':
+//       return "building";
+//     default:
+//       return structure_type;
+//   }
+// }
+//
+// function vehicleType(vehicle_type) {
+//   switch (vehicle_type){
+//     case 'C':
+//       return "car";
+//     case 'M':
+//       return "motorcycle";
+//     case 'H':
+//       return "heavy_vehicle";
+//     case 'T':
+//       return "trailer";
+//     default:
+//       return vehicle_type;
+//   }
+// }
 
 let counter = 0;
 
@@ -133,14 +133,14 @@ _.forEach(smartiesUraCarparksDump, async (carparkItem) => {
 // };
 //
 // AWS.config.update({
-//   region: "ap-southeast-1",
+//   region: "us-west-2",
 // });
 //
 // var dynamodb = new AWS.DynamoDB({
-//   region: "ap-southeast-1"
+//   region: "us-west-2"
 // });
 //
-// dynamodb.createTable(params, function(err, data) {
+// dynamoDB.createTable(params, function(err, data) {
 //   if (err) console.log(err, err.stack); // an error occurred
 //   else     console.log(data);           // successful response
 // });

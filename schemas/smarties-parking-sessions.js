@@ -13,15 +13,15 @@ var _ = require('lodash');
 var fs = require('fs');
 var ulid = require('ulid');
 var moment = require('moment');
-var utils = require('./utils');
+var utils = require('../api/utils');
 var Promise = require("bluebird");
 var AWS = require('aws-sdk');
 
 // DynamoDB Modules
-var docClient = new AWS.DynamoDB.DocumentClient({region: 'ap-southeast-1'});
+var docClient = new AWS.DynamoDB.DocumentClient({region: 'us-west-2'});
 Promise.promisifyAll(Object.getPrototypeOf(docClient));
 // the document client doesn't have methods for table/database level operations
-var dynamoDB = new AWS.DynamoDB({region: 'ap-southeast-1'});
+var dynamoDB = new AWS.DynamoDB({region: 'us-west-2'});
 Promise.promisifyAll(Object.getPrototypeOf(dynamoDB));
 
 // var uraRates = require('../resources/ura_parking_codes_rates.json');
@@ -76,11 +76,11 @@ var params = {
 };
 
 // AWS.config.update({
-//   region: "ap-southeast-1",
+//   region: "us-west-2",
 // });
 
 var dynamodb = new AWS.DynamoDB({
-  region: "ap-southeast-1"
+  region: "us-west-2"
 });
 
 dynamodb.createTable(params, function(err, data) {

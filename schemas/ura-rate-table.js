@@ -13,80 +13,80 @@ var _ = require('lodash');
 var fs = require('fs');
 var ulid = require('ulid');
 var moment = require('moment');
-var utils = require('./utils');
+var utils = require('../api/utils');
 var Promise = require("bluebird");
 var AWS = require('aws-sdk');
 
 // DynamoDB Modules
-var docClient = new AWS.DynamoDB.DocumentClient({region: 'ap-southeast-1'});
+var docClient = new AWS.DynamoDB.DocumentClient({region: 'us-west-2'});
 Promise.promisifyAll(Object.getPrototypeOf(docClient));
 // the document client doesn't have methods for table/database level operations
-var dynamoDB = new AWS.DynamoDB({region: 'ap-southeast-1'});
+var dynamoDB = new AWS.DynamoDB({region: 'us-west-2'});
 Promise.promisifyAll(Object.getPrototypeOf(dynamoDB));
 
-var uraRates = require('../resources/ura_parking_codes_rates.json');
+// var uraRates = require('../resources/ura_parking_codes_rates.json');
 
-var uraRatesDb = require('../resources/smartiesUraCarparkRates.json');
-
-let counter = 0;
-
-_.forEach(uraRatesDb, async (rateItem) => {
-  let params = {
-    TableName : 'smarties-ura-carpark-rates',
-    Item: rateItem
-  };
-  try {
-    console.log(`inserting ${++counter}`)
-    await docClient.putAsync(params)
-  } catch (err) {
-    console.log(err);
-    console.log(rateItem);
-  }
-});
+// var uraRatesDbDump = require('../resources/smartiesUraCarparkRates.json');
+//
+// let counter = 0;
+//
+// _.forEach(uraRatesDbDump, async (rateItem) => {
+//   let params = {
+//     TableName : 'smarties-ura-carpark-rates',
+//     Item: rateItem
+//   };
+//   try {
+//     console.log(`inserting ${++counter}`)
+//     await docClient.putAsync(params)
+//   } catch (err) {
+//     console.log(err);
+//     console.log(rateItem);
+//   }
+// });
 
 
 // Creating Table
 
-// var params = {
-//   TableName: "smarties-ura-carpark-rates",
-//   KeySchema: [
-//     {
-//       AttributeName: "rate_code",
-//       KeyType: "HASH"
-//     },
-//     {
-//       AttributeName: "timestamp",
-//       KeyType: "RANGE"
-//     }
-//   ],
-//   AttributeDefinitions: [
-//     {
-//       AttributeName: "rate_code",
-//       AttributeType: "S"
-//     },
-//     {
-//       AttributeName: "timestamp",
-//       AttributeType: "S"
-//     }
-//   ],
-//   ProvisionedThroughput: {
-//     ReadCapacityUnits: 1,
-//     WriteCapacityUnits: 5
-//   }
-// };
-//
-// // AWS.config.update({
-// //   region: "ap-southeast-1",
-// // });
-//
-// var dynamodb = new AWS.DynamoDB({
-//   region: "ap-southeast-1"
+var params = {
+  TableName: "smarties-ura-carpark-rates",
+  KeySchema: [
+    {
+      AttributeName: "rate_code",
+      KeyType: "HASH"
+    },
+    {
+      AttributeName: "timestamp",
+      KeyType: "RANGE"
+    }
+  ],
+  AttributeDefinitions: [
+    {
+      AttributeName: "rate_code",
+      AttributeType: "S"
+    },
+    {
+      AttributeName: "timestamp",
+      AttributeType: "S"
+    }
+  ],
+  ProvisionedThroughput: {
+    ReadCapacityUnits: 1,
+    WriteCapacityUnits: 5
+  }
+};
+
+// AWS.config.update({
+//   region: "us-west-2",
 // });
-//
-// dynamodb.createTable(params, function(err, data) {
-//   if (err) console.log(err, err.stack); // an error occurred
-//   else     console.log(data);           // successful response
-// });
+
+var dynamoDB = new AWS.DynamoDB({
+  region: "us-west-2"
+});
+
+dynamoDB.createTable(params, function(err, data) {
+  if (err) console.log(err, err.stack); // an error occurred
+  else     console.log(data);           // successful response
+});
 
 // ## carpark_rates
 //
