@@ -33,10 +33,10 @@ server.use(restify.bodyParser());
 server.use(restify.gzipResponse());
 
 // DynamoDB Modules
-var docClient = new AWS.DynamoDB.DocumentClient({region: 'ap-southeast-1'});
+var docClient = new AWS.DynamoDB.DocumentClient({region: 'us-west-2'});
 Promise.promisifyAll(Object.getPrototypeOf(docClient));
 // the document client doesn't have methods for table/database level operations
-var dynamoDB = new AWS.DynamoDB({region: 'ap-southeast-1'});
+var dynamoDB = new AWS.DynamoDB({region: 'us-west-2'});
 Promise.promisifyAll(Object.getPrototypeOf(dynamoDB));
 
 // Set up validations
