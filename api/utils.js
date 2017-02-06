@@ -71,7 +71,11 @@ module.exports = {
                               moment(currentMoment).add(remainingDuration),
                               rateBlockEnd
                             ]) - currentMoment;
-      totalPrice = totalPrice + (Math.ceil(accountedDuration / 60000) * currentRateInCentsPerMin);
+      let accountedPrice = (Math.ceil(accountedDuration / 60000) * currentRateInCentsPerMin);
+      if (currentRateBlock.price_cap && accountedPrice > currentRateBlock.price_cap * 100) {
+        accountedPrice = currentRateBlock.price_cap * 100;
+      }
+      totalPrice = totalPrice + accountedPrice;
       console.log(`totalPrice: ${totalPrice}`);
       chargedDuration = chargedDuration + accountedDuration;
       console.log(`chargedDuration: ${chargedDuration}`);
