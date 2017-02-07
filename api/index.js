@@ -448,7 +448,7 @@ server.post('/v1/stopparking', async (req, res) => {
   try {
     transactionToPartialRefund = await getTransaction(sessionToPartialRefund.transaction_id)
     if (_.isEmpty(transactionToPartialRefund)) {
-      throw "Your session was not found. This is likely due to a database wipe before the trial."
+      throw "Your session was not found. This is likely due to a database wipe before the trial. Simply wait out your current session on your app and it will be back to normal."
     }
     transactionToPartialRefund = transactionToPartialRefund.Item;
 
