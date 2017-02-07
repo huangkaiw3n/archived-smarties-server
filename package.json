@@ -19,6 +19,7 @@
     "dynalite": "^1.1.0",
     "firebase-admin": "^4.1.0",
     "jsonwebtoken": "^7.2.1",
+    "lodash": "^4.17.4",
     "moment": "^2.17.1",
     "restify": "^4.3.0",
     "socket.io": "^1.7.2",

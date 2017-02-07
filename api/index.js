@@ -1,4 +1,3 @@
-var _ = require('lodash');
 var restify = require('restify');
 var fs = require('fs');
 var ulid = require('ulid');
@@ -6,8 +5,10 @@ var moment = require('moment');
 var utils = require('./utils');
 var Promise = require("bluebird");
 var AWS = require('aws-sdk');
-var Firebase = require('./firebaseDatabase')
-var Payment = require('./payments')
+var Firebase = require('./firebaseDatabase');
+var Payment = require('./payments');
+var _ = require('lodash');
+
 
 // JSON Validator
 var jsonv = require('ajv');
@@ -296,67 +297,95 @@ server.post('/v1/parkcar', async (req, res) => {
         validTill: parkingSession.end_timestamp,
       });
     }
-
     console.log("Published on Firebase");
-
-    // Charge via stripe
-    let chargeOptions = {
-      value: totalPrice,
-      description: `Carpark:${data.carpark_code} Date:${moment().utcOffset(8).format('Do MMM YY, h:mmA')}`,
-      statement_descriptor: `CP-${data.carpark_code} LP-${data.license_plate}`,
-      idempotencyKey: `charge_${parkingSession.timestamp_parking_id}`,
-    };
-
-    if (data.stripeTokenId.split("_")[0] === "cus"){
-      chargeOptions = _.assign(chargeOptions, {customer: data.stripeTokenId})
-    } else {
-      chargeOptions = _.assign(chargeOptions, {source: data.stripeTokenId})
-    }
-
-    let stripeCharge = await Payment.chargeCard(chargeOptions);
-
-    console.log(`Charged ${totalPrice} via Stripe`);
-
-    let completedChargeTimestamp = Date.now();
-
-    let transaction = {
-      transaction_id: ulid(),
-      parking_id: {
-        date_carpark_code: parkingSession.date_carpark_code,
-        timestamp_parking_id: parkingSession.timestamp_parking_id
-      },
-      stripe_charge_id: stripeCharge.id,
-      events: [{
-        type: "payment",
-        amount: totalPrice,
-        timestamp: completedChargeTimestamp
-      }],
-      metadata: `CP-${data.carpark_code} LP-${data.license_plate} `
-    };
-
-    let insertedTransaction = await putTransaction(transaction);
-
-    console.log("Inserted Transaction");
-
-    await updateParkingSession(parkingSession.date_carpark_code,
-                               parkingSession.timestamp_parking_id,
-                               {"status": "completed_payment","timestamp": completedChargeTimestamp},
-                               transaction.transaction_id);
-
-    console.log("Updated Parking Session");
-
-    parkingSession = _.assign(parkingSession,
-      {
-        parking_events: parkingSession['parking_events'].concat([{"status": "completed_payment","timestamp": completedChargeTimestamp}])
-      },
-      {transaction_id: transaction.transaction_id}
-    );
-
   } catch (err) {
-    console.log(err);
-    console.log("Error Session:", parkingSession);
+    console.log("Error: Could not set up parking session", err);
     return res.json(409, {error: err});
   }
+
+  // Charge via stripe
+  let chargeOptions = {
+    value: totalPrice,
+    description: `TxnId: ${transaction.transaction_id} Date:${moment().utcOffset(8).format('Do MMM YY, h:mmA')} Carpark:${data.carpark_code}`,
+    statement_descriptor: `CP-${data.carpark_code} LP-${data.license_plate}`,
+    idempotencyKey: `charge_${parkingSession.timestamp_parking_id}`,
+  };
+
+  if (data.stripeTokenId.split("_")[0] === "cus"){
+    chargeOptions = _.assign(chargeOptions, {customer: data.stripeTokenId})
+  } else {
+    chargeOptions = _.assign(chargeOptions, {source: data.stripeTokenId})
+  }
+
+  let stripeCharge;
+  let completedChargeTimestamp;
+
+  try {
+    stripeCharge = await Payment.chargeCard(chargeOptions);
+    completedChargeTimestamp = Date.now();
+    console.log(`Charged ${totalPrice} via Stripe`);
+  } catch (err) {
+    // Rollback and return fail
+    let failedChargeId = _.get(err, 'raw.charge', null);
+    console.log("Rolling back");
+    let failureTimestamp = Date.now();
+    await updateTransaction(
+      transaction.transaction_id,
+      {
+        type: "charge_failed",
+        timestamp: failureTimestamp
+      },
+      failedChargeId
+    );
+    console.log("Updated transaction to failed")
+    await updateParkingSession(
+      parkingSession.date_carpark_code,
+      parkingSession.timestamp_parking_id,
+      {"status": "charge_failed","timestamp": failureTimestamp},
+      transaction.transaction_id
+    );
+    console.log("Updated parking session to failed")
+    if (!jwtParkingSessions){
+      await Firebase.getDatabase().ref(`/${data.carpark_code}/${parkingSession.timestamp_parking_id}`).remove();
+    } else {
+      await Firebase.getDatabase().ref(`/${data.carpark_code}/${jwtParkingSessions[0]['timestamp_parking_id']}`).update({
+        validTill: jwtParkingSessions[jwtParkingSessions.length - 1]['end_timestamp']
+      });
+    }
+    console.log("Removed/updated firebase entry");
+    console.log("Error: Charge Failed", err);
+    return res.json(409, {error: err});
+  }
+
+  try {
+    await updateTransaction(
+      transaction.transaction_id,
+      {
+        type: "completed_payment",
+        amount: totalPrice,
+        timestamp: completedChargeTimestamp
+      },
+      stripeCharge.id
+    );
+    console.log("Updated Transaction");
+
+    await updateParkingSession(
+      parkingSession.date_carpark_code,
+      parkingSession.timestamp_parking_id,
+      {"status": "completed_payment","timestamp": completedChargeTimestamp},
+      transaction.transaction_id
+    );
+    console.log("Updated Parking Session");
+  } catch (err) {
+    console.log("Error: Could not update transaction/parking session after charging", err)
+  }
+
+  parkingSession = _.assign(parkingSession,
+    {
+      parking_events: parkingSession['parking_events'].concat([{"status": "completed_payment","timestamp": completedChargeTimestamp}])
+    },
+    {transaction_id: transaction.transaction_id}
+  );
 
   let jwtPayload;
   let signedJwt;
@@ -420,7 +449,7 @@ server.post('/v1/stopparking', async (req, res) => {
     transactionToPartialRefund = await getTransaction(sessionToPartialRefund.transaction_id)
     transactionToPartialRefund = transactionToPartialRefund.Item;
 
-    paymentToPartialRefund = _.find(transactionToPartialRefund.events, (e) => e.type === "payment");
+    paymentToPartialRefund = _.find(transactionToPartialRefund.events, (e) => e.type === "completed_payment");
 
     console.log("Payment to refund", paymentToPartialRefund)
     console.log("sessionToPartialRefund", sessionToPartialRefund)
@@ -450,7 +479,7 @@ server.post('/v1/stopparking', async (req, res) => {
 
     await updateTransaction(
       sessionToPartialRefund.transaction_id,
-      {"type": "refund", "timestamp": now, "amount": chargePartialRefunded.amount}
+      {"type": "completed_refund", "timestamp": now, "amount": chargePartialRefunded.amount}
     );
 
     for (p in sessionsToFullRefund ) {
@@ -470,7 +499,7 @@ server.post('/v1/stopparking', async (req, res) => {
       );
       await updateTransaction(
         sessionsToFullRefund[p].transaction_id,
-        {"type": "refund", "timestamp": now, "amount": chargeFullRefunded.amount}
+        {"type": "completed_refund", "timestamp": now, "amount": chargeFullRefunded.amount}
       );
     };
   }
@@ -485,7 +514,7 @@ server.post('/v1/stopparking', async (req, res) => {
     await Firebase.getDatabase().ref(`/${carparkCode}/${jwtParkingSessions[0]['timestamp_parking_id']}`).remove();
   } catch (err) {
     // Notify soft fail.
-    console.log("Error: Failed to remove parking session after refund")
+    console.log("Error: Failed to remove parking session after refund", err)
   }
 
   res.json({
@@ -565,20 +594,37 @@ function updateParkingSession(hashKey, sortKey, parkingEvent, transactionId) {
   return docClient.updateAsync(parkingUpdate);
 }
 
-function updateTransaction(hashKey, transactionEvent) {
-  let transactionUpdate = {
-    "TableName": "smarties-transactions",
-    "Key": {
-      "transaction_id": hashKey,
-    },
-    "UpdateExpression": "set events=list_append(events,:p)",
-    "ExpressionAttributeValues": {
-      ":p": [
-        transactionEvent
-      ]
-    }
-  };
+function updateTransaction(hashKey, transactionEvent, stripeChargeId) {
+  let transactionUpdate;
 
+  if (stripeChargeId){
+    transactionUpdate =  {
+      "TableName": "smarties-transactions",
+      "Key": {
+        "transaction_id": hashKey,
+      },
+      "UpdateExpression": "set events=list_append(events,:p), stripe_charge_id=:s",
+      "ExpressionAttributeValues": {
+        ":p": [
+          transactionEvent
+        ],
+        ":s": stripeChargeId
+      }
+    };
+  } else {
+    transactionUpdate =  {
+      "TableName": "smarties-transactions",
+      "Key": {
+        "transaction_id": hashKey,
+      },
+      "UpdateExpression": "set events=list_append(events,:p)",
+      "ExpressionAttributeValues": {
+        ":p": [
+          transactionEvent
+        ]
+      }
+    };
+  }
   return docClient.updateAsync(transactionUpdate);
 }
 
