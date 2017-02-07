@@ -133,9 +133,17 @@ server.post('/v1/parkcar', async (req, res) => {
   // Querying the carpark
   let carpark;
   console.log("Querying carpark_code", data.carpark_code);
+  // try {
+  //   carpark = await getCarpark(data.carpark_code);
+  //   carpark = carpark.Item;
+  // } catch (err) {
+  //   return res.json(400, {
+  //     error: err
+  //   });
+  // }
+
   try {
-    carpark = await getCarpark(data.carpark_code);
-    carpark = carpark.Item;
+    carpark = _.find(smartiesUraCarparks, (c) => c.carpark_code === data.carpark_code);
   } catch (err) {
     return res.json(400, {
       error: err
