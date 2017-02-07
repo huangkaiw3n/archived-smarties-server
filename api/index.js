@@ -111,7 +111,7 @@ const postParkCarValidator = validateParkCarBody.compile(postParkCarBodySchema);
 server.post('/v1/parkcar', async (req, res) => {
   let data = req.body;
   let token = req.headers['smarties-jwt'];
-  console.log("Smarties-jwt token:",token);
+  console.log("Smarties-jwt token:", token ? true : false);
   let decodedToken;
   let jwtParkingSessions; // previous sessions from jwt
 
@@ -242,6 +242,34 @@ server.post('/v1/parkcar', async (req, res) => {
     }]
   };
 
+  let transaction = {
+    transaction_id: ulid(),
+    parking_id: {
+      date_carpark_code: parkingSession.date_carpark_code,
+      timestamp_parking_id: parkingSession.timestamp_parking_id
+    },
+    events: [{
+      type: "pending_payment",
+      timestamp: Date.now()
+    }],
+    metadata: `CP-${data.carpark_code} LP-${data.license_plate} `
+  };
+
+  // let transaction = {
+  //   transaction_id: ulid(),
+  //   parking_id: {
+  //     date_carpark_code: parkingSession.date_carpark_code,
+  //     timestamp_parking_id: parkingSession.timestamp_parking_id
+  //   },
+  //   stripe_charge_id: stripeCharge.id,
+  //   events: [{
+  //     type: "payment",
+  //     amount: totalPrice,
+  //     timestamp: completedChargeTimestamp
+  //   }],
+  //   metadata: `CP-${data.carpark_code} LP-${data.license_plate} `
+  // };
+
   console.log(`Parking to ${data.carpark_code}, LP: ${data.license_plate} VT: ${data.vehicle_type} LOT: ${data.lot_number}`)
 
   try {
@@ -249,6 +277,10 @@ server.post('/v1/parkcar', async (req, res) => {
     let insertedParking = await putParkingSession(parkingSession);
 
     console.log("Inserted Parking Session");
+
+    let insertedTransaction = await putTransaction(transaction);
+
+    console.log("Inserted Transaction");
 
     // Publish on Firebase
     if (!jwtParkingSessions){
