@@ -10,7 +10,7 @@ const initFirebase = () => {
       databaseURL: "https://parkpark-334b8.firebaseio.com"
     };
 
-    admin.database.enableLogging(true)
+    // admin.database.enableLogging(true)
     admin.initializeApp(config)
     HAS_INITIALIZED = true
   }

@@ -435,7 +435,6 @@ server.post('/v1/stopparking', async (req, res) => {
 
                               console.log("Partial Refund amount:", partialRefundAmount)
 
-
     let chargePartialRefunded =  await Payment.refundCharge(
                                    transactionToPartialRefund.stripe_charge_id,
                                    partialRefundAmount,
@@ -482,7 +481,12 @@ server.post('/v1/stopparking', async (req, res) => {
   }
 
   // Remove published session on FB
-  await Firebase.getDatabase().ref(`/${carparkCode}/${jwtParkingSessions[0]['timestamp_parking_id']}`).remove();
+  try {
+    await Firebase.getDatabase().ref(`/${carparkCode}/${jwtParkingSessions[0]['timestamp_parking_id']}`).remove();
+  } catch (err) {
+    // Notify soft fail.
+    console.log("Error: Failed to remove parking session after refund")
+  }
 
   res.json({
     body: {
