@@ -7,7 +7,7 @@ const initFirebase = () => {
   if (!HAS_INITIALIZED) {
     var config = {
       credential: admin.credential.cert(serviceAccount),
-      databaseURL: "https://parkpark-334b8.firebaseio.com"
+      databaseURL: process.env.FIREBASE_URL
     };
 
     // admin.database.enableLogging(true)

@@ -8,6 +8,7 @@ var Payment = require('./payments');
 
 var validator = require('./validator')
 
+var chalk = require('chalk');
 var _ = require('lodash');
 
 var smartiesUraCarparks = require("../resources/smartiesUraCarparks.json");
@@ -449,8 +450,6 @@ server.post('/v1/stopparking', async (req, res) => {
 
 });
 
-
-
 Firebase.getDatabase();
 
 var connectedRef = Firebase.getDatabase().ref(".info/connected");
@@ -465,3 +464,5 @@ connectedRef.on("value", (snap) => {
 server.listen(serverPort, () => {
   console.log('%s listening at %s', server.name, server.url);
 });
+
+console.log(chalk.blue(`ENVIRONMENT LOADED ${process.env.ENVIRONMENT_NAME}`));
