@@ -1,10 +1,3 @@
-var _ = require('lodash');
-var restify = require('restify');
-var fs = require('fs');
-var ulid = require('ulid');
-var moment = require('moment');
-var utils = require('./utils');
-var Promise = require("bluebird");
 var Payment = require('./payments')
 
 Payment.createStripeToken({

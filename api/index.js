@@ -1,17 +1,17 @@
 var restify = require('restify');
-var fs = require('fs');
 var ulid = require('ulid');
 var moment = require('moment');
 var utils = require('./utils');
-var Promise = require("bluebird");
-var AWS = require('aws-sdk');
 var Firebase = require('./firebaseDatabase');
+var awsDb = require('awsDb');
 var Payment = require('./payments');
+
+var validator = require('./validator')
+
 var _ = require('lodash');
 
-
-// JSON Validator
-var jsonv = require('ajv');
+var smartiesUraCarparks = require("../resources/smartiesUraCarparks.json");
+var smartiesUraCarparkRates = require("../resources/smartiesUraCarparkRates.json");
 
 // JSON Web Token
 var jwt = require('jsonwebtoken');
@@ -24,90 +24,11 @@ var server = restify.createServer({
   name: 'smarties-api'
 });
 
-var smartiesUraCarparks = require("../resources/smartiesUraCarparks.json");
-var smartiesUraCarparkRates = require("../resources/smartiesUraCarparkRates.json");
-
 // add restify middleware
 server.use(restify.CORS());
 server.use(restify.queryParser());
 server.use(restify.bodyParser());
 server.use(restify.gzipResponse());
-
-// DynamoDB Modules
-var docClient = new AWS.DynamoDB.DocumentClient({region: 'us-west-2'});
-Promise.promisifyAll(Object.getPrototypeOf(docClient));
-// the document client doesn't have methods for table/database level operations
-var dynamoDB = new AWS.DynamoDB({region: 'us-west-2'});
-Promise.promisifyAll(Object.getPrototypeOf(dynamoDB));
-
-// Set up validations
-const postParkCarBodySchema = {
-  type: 'object',
-  required: [
-    'carpark_code',
-    'license_plate',
-    'vehicle_type',
-    'lot_number',
-    'duration',
-    'expectedPrice',
-    'stripeTokenId'
-  ],
-  properties: {
-    carpark_code: {
-      type: 'string'
-    },
-    license_plate: {
-      type: 'string',
-      format: 'carplate'
-    },
-    vehicle_type: {
-      type: 'string',
-      enum: ['car', 'motorcycle', 'heavy_vehicle']
-    },
-    lot_number: {
-      type: 'string'
-    },
-    duration: {
-      type: 'number'
-    },
-    expectedPrice: {
-      type: 'number'
-    },
-    stripeTokenId: {
-      type: 'string'
-    }
-  }
-};
-// load schema into the validator
-var validateParkCarBody = new jsonv();
-validateParkCarBody.addFormat('carplate', /^([a-zA-Z]{1,3})(\d{1,5})([a-zA-Z]{1,2})$/);
-const postParkCarValidator = validateParkCarBody.compile(postParkCarBodySchema);
-
-
-// POST /v1/parkcar
-// body: {
-//   carpark_code: (string),
-//   vehicle_type: (string), [car, motorcycle, heavy_vehicle],
-//   lot_number: (string),
-//   duration: (number) - in minutes,
-//   expectedPrice: (number) - in cents,
-//   stripeTokenId: (string)
-// }
-// Success response
-// header: {
-//   "smarties-jwt": jwt(parkingids)
-// }
-// body: {
-//   carpark_code,
-//   vehicle_type,
-//   lot_number,
-//   start_time,
-//   end_time,
-//   paid_amount
-// }
-// Failure response
-// 401, { message: 'malformed request params provided!' }
-// 409, { message: 'Price mismatch. Update prices or try again.'}
 
 server.post('/v1/parkcar', async (req, res) => {
   let data = req.body;
@@ -126,7 +47,7 @@ server.post('/v1/parkcar', async (req, res) => {
   }
 
   // validate the json body data
-  var valid = postParkCarValidator(data);
+  var valid = validator.postParkCarValidator(data);
   if (!valid) {
     return res.json(400, { message: 'Malformed params provided!' });
   }
@@ -528,108 +449,7 @@ server.post('/v1/stopparking', async (req, res) => {
 
 });
 
-function getTransaction(transactionId) {
-  return docClient.getAsync({
-    Key: {
-      "transaction_id": transactionId
-    },
-    TableName: 'smarties-transactions'
-  });
-}
 
-function getCarpark(carparkCode) {
-  return docClient.getAsync({
-    Key: {
-      "carpark_code": carparkCode
-    },
-    TableName: 'smarties-ura-carparks'
-  });
-}
-
-function putParkingSession(parkingSession) {
-  return docClient.putAsync({
-    TableName : "smarties-parking-sessions",
-    Item: parkingSession
-  });
-}
-
-function putTransaction(transaction) {
-  return docClient.putAsync({
-    TableName : "smarties-transactions",
-    Item: transaction
-  });
-}
-
-function updateParkingSession(hashKey, sortKey, parkingEvent, transactionId) {
-  let parkingUpdate;
-
-  if (transactionId) {
-    parkingUpdate = {
-      "TableName": "smarties-parking-sessions",
-      "Key": {
-        "date_carpark_code": hashKey,
-        "timestamp_parking_id": sortKey
-      },
-      "UpdateExpression": "set parking_events=list_append(parking_events,:p), transaction_id=:t",
-      "ExpressionAttributeValues": {
-        ":p": [
-          parkingEvent
-        ],
-        ":t": transactionId
-      }
-    };
-  } else {
-    parkingUpdate = {
-      "TableName": "smarties-parking-sessions",
-      "Key": {
-        "date_carpark_code": hashKey,
-        "timestamp_parking_id": sortKey
-      },
-      "UpdateExpression": "set parking_events=list_append(parking_events,:p)",
-      "ExpressionAttributeValues": {
-        ":p": [
-          parkingEvent
-        ]
-      }
-    };
-  }
-
-  return docClient.updateAsync(parkingUpdate);
-}
-
-function updateTransaction(hashKey, transactionEvent, stripeChargeId) {
-  let transactionUpdate;
-
-  if (stripeChargeId){
-    transactionUpdate =  {
-      "TableName": "smarties-transactions",
-      "Key": {
-        "transaction_id": hashKey,
-      },
-      "UpdateExpression": "set events=list_append(events,:p), stripe_charge_id=:s",
-      "ExpressionAttributeValues": {
-        ":p": [
-          transactionEvent
-        ],
-        ":s": stripeChargeId
-      }
-    };
-  } else {
-    transactionUpdate =  {
-      "TableName": "smarties-transactions",
-      "Key": {
-        "transaction_id": hashKey,
-      },
-      "UpdateExpression": "set events=list_append(events,:p)",
-      "ExpressionAttributeValues": {
-        ":p": [
-          transactionEvent
-        ]
-      }
-    };
-  }
-  return docClient.updateAsync(transactionUpdate);
-}
 
 Firebase.getDatabase();
 

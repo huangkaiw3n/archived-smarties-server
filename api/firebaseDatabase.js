@@ -1,5 +1,5 @@
 var admin = require("firebase-admin");
-var serviceAccount = require("../parkpark-334b8-firebase-adminsdk-yple2-397f952766.json");
+var serviceAccount = require(process.env.FIREBASE_AUTH);
 
 let HAS_INITIALIZED = false
 
