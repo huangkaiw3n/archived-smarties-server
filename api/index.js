@@ -18,6 +18,8 @@ var smartiesUraCarparkRates = require("../resources/smartiesUraCarparkRates.json
 var jwt = require('jsonwebtoken');
 const JWT_SECRET = process.env.SMARTIES_JWT_SECRET || "abcdefg";
 
+const nowFormatted = () => moment().utcOffset(8).format();
+
 // Restify Configuration
 var serverPort = process.env.PORT || 10000
 
@@ -102,9 +104,9 @@ server.post('/v1/parkcar', async (req, res) => {
   let startTimestamp;
 
   if (!jwtParkingSessions) {
-    startTimestamp = Date.now();
+    startTimestamp = moment();
   } else {
-    startTimestamp = jwtParkingSessions[jwtParkingSessions.length - 1]['end_timestamp'];
+    startTimestamp = moment(jwtParkingSessions[jwtParkingSessions.length - 1]['end_timestamp']);
   }
 
   let [startParkingMoment,
@@ -138,72 +140,29 @@ server.post('/v1/parkcar', async (req, res) => {
     });
   }
 
-  //Time to insert parking session, then charge, then return succcess with info and jwt as payload
-  // 1. Write pending_payment parkingSession into AWS
-  // 2. Publish session on FB.
-  // 3. Charge stripe
-  // 4. Success Charge
-  //      a. Insert transaction record into AWS
-  //      b. Update parking session to completed_payment and set transactionId on AWS - We should continue if this fails
-  //      c. Give success response to user
-  // 4. Fail Charge (Yet to handle)
-  //      a. Delete parking session on AWS
-  //      b. Remove session on FB
-  //      c. Give fail response to user
+  let sessionCreatedTimestamp = nowFormatted();
+
   let parkingSession = {
     date_carpark_code: `${moment().utcOffset(8).format('YYYY-MM-DD')}_${data.carpark_code}`,
-    timestamp_parking_id: `${Date.now()}_${ulid()}`,
+    timestamp_parking_id: `${sessionCreatedTimestamp}_${ulid()}`,
     license_plate: data.license_plate,
     vehicle_type: data.vehicle_type,
     lot_number: data.lot_number,
-    start_timestamp: startParkingMoment.valueOf(),
-    end_timestamp: endParkingMoment.valueOf(),
-    transaction_id: null,
-    parking_events: [{
+    start_timestamp: startParkingMoment.utcOffset(8).format(),
+    end_timestamp: endParkingMoment.utcOffset(8).format(),
+    events: [{
       status: 'pending_payment',
-      timestamp: Date.now()
+      timestamp: sessionCreatedTimestamp
     }]
   };
-
-  let transaction = {
-    transaction_id: ulid(),
-    parking_id: {
-      date_carpark_code: parkingSession.date_carpark_code,
-      timestamp_parking_id: parkingSession.timestamp_parking_id
-    },
-    events: [{
-      type: "pending_payment",
-      timestamp: Date.now()
-    }],
-    metadata: `CP-${data.carpark_code} LP-${data.license_plate} `
-  };
-
-  // let transaction = {
-  //   transaction_id: ulid(),
-  //   parking_id: {
-  //     date_carpark_code: parkingSession.date_carpark_code,
-  //     timestamp_parking_id: parkingSession.timestamp_parking_id
-  //   },
-  //   stripe_charge_id: stripeCharge.id,
-  //   events: [{
-  //     type: "payment",
-  //     amount: totalPrice,
-  //     timestamp: completedChargeTimestamp
-  //   }],
-  //   metadata: `CP-${data.carpark_code} LP-${data.license_plate} `
-  // };
 
   console.log(`Parking to ${data.carpark_code}, LP: ${data.license_plate} VT: ${data.vehicle_type} LOT: ${data.lot_number}`)
 
   try {
     // Insert into parking session table
-    let insertedParking = await putParkingSession(parkingSession);
+    let insertedParking = await awsDb.putParkingSession(parkingSession);
 
     console.log("Inserted Parking Session");
-
-    let insertedTransaction = await putTransaction(transaction);
-
-    console.log("Inserted Transaction");
 
     // Publish on Firebase
     if (!jwtParkingSessions){
@@ -228,7 +187,7 @@ server.post('/v1/parkcar', async (req, res) => {
   // Charge via stripe
   let chargeOptions = {
     value: totalPrice,
-    description: `TxnId: ${transaction.transaction_id} Date:${moment().utcOffset(8).format('Do MMM YY, h:mmA')} Carpark:${data.carpark_code}`,
+    description: `TxnId: ${parkingSession.timestamp_parking_id} Carpark:${data.carpark_code}`,
     statement_descriptor: `CP-${data.carpark_code} LP-${data.license_plate}`,
     idempotencyKey: `charge_${parkingSession.timestamp_parking_id}`,
   };
@@ -244,27 +203,19 @@ server.post('/v1/parkcar', async (req, res) => {
 
   try {
     stripeCharge = await Payment.chargeCard(chargeOptions);
-    completedChargeTimestamp = Date.now();
+    completedChargeTimestamp = nowFormatted();
     console.log(`Charged ${totalPrice} via Stripe`);
   } catch (err) {
     // Rollback and return fail
-    let failedChargeId = _.get(err, 'raw.charge', null);
     console.log("Rolling back");
-    let failureTimestamp = Date.now();
-    await updateTransaction(
-      transaction.transaction_id,
-      {
-        type: "charge_failed",
-        timestamp: failureTimestamp
-      },
-      failedChargeId
-    );
-    console.log("Updated transaction to failed")
-    await updateParkingSession(
+
+    let failedChargeId = _.get(err, 'raw.charge', null);
+    let failureTimestamp = nowFormatted();
+    await awsDb.updateParkingSession(
       parkingSession.date_carpark_code,
       parkingSession.timestamp_parking_id,
       {"status": "charge_failed","timestamp": failureTimestamp},
-      transaction.transaction_id
+      failedChargeId
     );
     console.log("Updated parking session to failed")
     if (!jwtParkingSessions){
@@ -280,22 +231,15 @@ server.post('/v1/parkcar', async (req, res) => {
   }
 
   try {
-    await updateTransaction(
-      transaction.transaction_id,
-      {
-        type: "completed_payment",
-        amount: totalPrice,
-        timestamp: completedChargeTimestamp
-      },
-      stripeCharge.id
-    );
-    console.log("Updated Transaction");
-
-    await updateParkingSession(
+    await awsDb.updateParkingSession(
       parkingSession.date_carpark_code,
       parkingSession.timestamp_parking_id,
-      {"status": "completed_payment","timestamp": completedChargeTimestamp},
-      transaction.transaction_id
+      {
+        "status": "completed_payment",
+        "amount": totalPrice,
+        "timestamp": completedChargeTimestamp
+      },
+      stripeCharge.id
     );
     console.log("Updated Parking Session");
   } catch (err) {
@@ -304,9 +248,15 @@ server.post('/v1/parkcar', async (req, res) => {
 
   parkingSession = _.assign(parkingSession,
     {
-      parking_events: parkingSession['parking_events'].concat([{"status": "completed_payment","timestamp": completedChargeTimestamp}])
+      events: parkingSession['events'].concat(
+        [{
+          "status": "completed_payment",
+          "amount": totalPrice,
+          "timestamp": completedChargeTimestamp}
+        ]
+      )
     },
-    {transaction_id: transaction.transaction_id}
+    {stripe_charge_id: stripeCharge.id}
   );
 
   let jwtPayload;
@@ -352,9 +302,9 @@ server.post('/v1/stopparking', async (req, res) => {
   let parkingType = _.find(carpark["parking_types"], (pt) => pt.vehicle_type === jwtParkingSessions[0]['vehicle_type']);
   let rateCodesApplied = _.filter(smartiesUraCarparkRates, (r) => parkingType.rate_code.includes(r.rate_code))
 
-  let now = Date.now();
-  let sessionToPartialRefund = _.find(jwtParkingSessions, (p) => p.start_timestamp <= now && p.end_timestamp > now);
-  let sessionsToFullRefund = _.filter(jwtParkingSessions, (p) => now <= p.start_timestamp);
+  let now = moment();
+  let sessionToPartialRefund = _.find(jwtParkingSessions, (session) => moment(session.start_timestamp) <= now && moment(session.end_timestamp) > now);
+  let sessionsToFullRefund = _.filter(jwtParkingSessions, (session) => now <= moment(session.start_timestamp));
 
   if (!sessionToPartialRefund) {
     return res.json(409, {
@@ -368,65 +318,54 @@ server.post('/v1/stopparking', async (req, res) => {
   let paymentToPartialRefund;
 
   try {
-    transactionToPartialRefund = await getTransaction(sessionToPartialRefund.transaction_id)
-    if (_.isEmpty(transactionToPartialRefund)) {
-      throw "Your session was not found. This is likely due to a database wipe before the trial. Simply wait out your current session on your app and it will be back to normal."
-    }
-    transactionToPartialRefund = transactionToPartialRefund.Item;
-
-    paymentToPartialRefund = _.find(transactionToPartialRefund.events, (e) => e.type === "completed_payment");
+    paymentToPartialRefund = _.find(sessionToPartialRefund.events, (event) => event.status === "completed_payment");
 
     console.log("Payment to refund", paymentToPartialRefund)
-    console.log("sessionToPartialRefund", sessionToPartialRefund)
-    console.log("rateCodesApplied", rateCodesApplied)
 
     let partialRefundAmount = paymentToPartialRefund.amount -
                               utils.calculateParkingSession(
                                 sessionToPartialRefund.start_timestamp,
-                                now - sessionToPartialRefund.start_timestamp,
+                                now - moment(sessionToPartialRefund.start_timestamp),
                                 rateCodesApplied
                               )[3];
 
                               console.log("Partial Refund amount:", partialRefundAmount)
 
     let chargePartialRefunded =  await Payment.refundCharge(
-                                   transactionToPartialRefund.stripe_charge_id,
+                                   sessionToPartialRefund.stripe_charge_id,
                                    partialRefundAmount,
                                    `refund_${sessionToPartialRefund.timestamp_parking_id}`);
 
     totalRefundedAmount = totalRefundedAmount + chargePartialRefunded.amount;
 
-    await updateParkingSession(
+    await awsDb.updateParkingSession(
       sessionToPartialRefund.date_carpark_code,
       sessionToPartialRefund.timestamp_parking_id,
-      {"status": "completed_refund","timestamp": now}
-    );
-
-    await updateTransaction(
-      sessionToPartialRefund.transaction_id,
-      {"type": "completed_refund", "timestamp": now, "amount": chargePartialRefunded.amount}
+      {
+        "status": "completed_refund",
+        "timestamp": now,
+        "amount": chargePartialRefunded.amount
+      }
     );
 
     for (p in sessionsToFullRefund ) {
-      let transactionToFullRefund = await getTransaction(sessionsToFullRefund[p].transaction_id);
-      transactionToFullRefund = transactionToFullRefund.Item;
       let chargeFullRefunded = await Payment.refundCharge(
-                                     transactionToFullRefund.stripe_charge_id,
+                                     sessionsToFullRefund[p].stripe_charge_id,
                                      0,
                                      `refund_${sessionsToFullRefund[p].timestamp_parking_id}`);
       totalRefundedAmount = totalRefundedAmount + chargeFullRefunded.amount;
 
       console.log("Total Refunded inside:", totalRefundedAmount);
-      await updateParkingSession(
+      await awsDb.updateParkingSession(
         sessionsToFullRefund[p].date_carpark_code,
         sessionsToFullRefund[p].timestamp_parking_id,
-        {"status": "completed_refund","timestamp": now}
+        {
+          "status": "completed_refund",
+          "timestamp": now,
+          "amount": chargeFullRefunded.amount
+        }
       );
-      await updateTransaction(
-        sessionsToFullRefund[p].transaction_id,
-        {"type": "completed_refund", "timestamp": now, "amount": chargeFullRefunded.amount}
-      );
-    };
+    }
   }
   catch (err) {
     return res.json(400, {

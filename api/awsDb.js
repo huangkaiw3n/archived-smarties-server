@@ -33,6 +33,16 @@ exports.putParkingSession = (parkingSession) => {
   });
 }
 
+exports.getParkingSession = (hashKey, sortKey) => {
+  return docClient.getAsync({
+    TableName: process.env.SMARTIES_PARKING_SESSIONS_TABLE,
+    Key: {
+      date_carpark_code: hashKey,
+      timestamp_parking_id: sortKey
+    }
+  });
+}
+
 exports.putTransaction = (transaction) => {
   return docClient.putAsync({
     TableName : process.env.SMARTIES_TRANSACTIONS_TABLE,
@@ -40,22 +50,22 @@ exports.putTransaction = (transaction) => {
   });
 }
 
-exports.updateParkingSession = (hashKey, sortKey, parkingEvent, transactionId) => {
+exports.updateParkingSession = (hashKey, sortKey, parkingEvent, stripeChargeId) => {
   let parkingUpdate;
 
-  if (transactionId) {
+  if (stripeChargeId) {
     parkingUpdate = {
       "TableName": process.env.SMARTIES_PARKING_SESSIONS_TABLE,
       "Key": {
         "date_carpark_code": hashKey,
         "timestamp_parking_id": sortKey
       },
-      "UpdateExpression": "set parking_events=list_append(parking_events,:p), transaction_id=:t",
+      "UpdateExpression": "set events=list_append(events,:p), stripe_charge_id=:s",
       "ExpressionAttributeValues": {
         ":p": [
           parkingEvent
         ],
-        ":t": transactionId
+        ":s": stripeChargeId
       }
     };
   } else {
@@ -65,7 +75,7 @@ exports.updateParkingSession = (hashKey, sortKey, parkingEvent, transactionId) =
         "date_carpark_code": hashKey,
         "timestamp_parking_id": sortKey
       },
-      "UpdateExpression": "set parking_events=list_append(parking_events,:p)",
+      "UpdateExpression": "set events=list_append(events,:p)",
       "ExpressionAttributeValues": {
         ":p": [
           parkingEvent
