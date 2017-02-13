@@ -47,33 +47,33 @@ Promise.promisifyAll(Object.getPrototypeOf(dynamoDB));
 
 // Creating Table
 
-var params = {
-  TableName: "smarties-parking-sessions",
-  KeySchema: [
-    {
-      AttributeName: "date_carpark_code",
-      KeyType: "HASH"
-    },
-    {
-      AttributeName: "timestamp_parking_id",
-      KeyType: "RANGE"
-    }
-  ],
-  AttributeDefinitions: [
-    {
-      AttributeName: "date_carpark_code",
-      AttributeType: "S"
-    },
-    {
-      AttributeName: "timestamp_parking_id",
-      AttributeType: "S"
-    }
-  ],
-  ProvisionedThroughput: {
-    ReadCapacityUnits: 3,
-    WriteCapacityUnits: 1
-  }
-};
+// var params = {
+//   TableName: process.env.SMARTIES_PARKING_SESSIONS_TABLE,
+//   KeySchema: [
+//     {
+//       AttributeName: "date_carpark_code",
+//       KeyType: "HASH"
+//     },
+//     {
+//       AttributeName: "timestamp_parking_id",
+//       KeyType: "RANGE"
+//     }
+//   ],
+//   AttributeDefinitions: [
+//     {
+//       AttributeName: "date_carpark_code",
+//       AttributeType: "S"
+//     },
+//     {
+//       AttributeName: "timestamp_parking_id",
+//       AttributeType: "S"
+//     }
+//   ],
+//   ProvisionedThroughput: {
+//     ReadCapacityUnits: 3,
+//     WriteCapacityUnits: 1
+//   }
+// };
 
 // AWS.config.update({
 //   region: "us-west-2",
