@@ -3,7 +3,7 @@ var ulid = require('ulid');
 var moment = require('moment');
 var utils = require('./utils');
 var Firebase = require('./firebaseDatabase');
-var awsDb = require('awsDb');
+var awsDb = require('./awsDb');
 var Payment = require('./payments');
 
 var validator = require('./validator')
