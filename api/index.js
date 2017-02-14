@@ -329,24 +329,26 @@ server.post('/v1/stopparking', async (req, res) => {
                                 rateCodesApplied
                               )[3];
 
-                              console.log("Partial Refund amount:", partialRefundAmount)
+    console.log("Partial Refund amount:", partialRefundAmount)
 
-    let chargePartialRefunded =  await Payment.refundCharge(
-                                   sessionToPartialRefund.stripe_charge_id,
-                                   partialRefundAmount,
-                                   `refund_${sessionToPartialRefund.timestamp_parking_id}`);
+    if (partialRefundAmount) {
+      let chargePartialRefunded = await Payment.refundCharge(
+                                    sessionToPartialRefund.stripe_charge_id,
+                                    partialRefundAmount,
+                                    `refund_${sessionToPartialRefund.timestamp_parking_id}`);
 
-    totalRefundedAmount = totalRefundedAmount + chargePartialRefunded.amount;
+      totalRefundedAmount = totalRefundedAmount + chargePartialRefunded.amount;
 
-    await awsDb.updateParkingSession(
-      sessionToPartialRefund.date_carpark_code,
-      sessionToPartialRefund.timestamp_parking_id,
-      {
-        "status": "completed_refund",
-        "timestamp": now,
-        "amount": chargePartialRefunded.amount
-      }
-    );
+      await awsDb.updateParkingSession(
+        sessionToPartialRefund.date_carpark_code,
+        sessionToPartialRefund.timestamp_parking_id,
+        {
+          "status": "completed_refund",
+          "timestamp": now.utcOffset(8).format(),
+          "amount": chargePartialRefunded.amount
+        }
+      );
+    }
 
     for (p in sessionsToFullRefund ) {
       let chargeFullRefunded = await Payment.refundCharge(
@@ -361,7 +363,7 @@ server.post('/v1/stopparking', async (req, res) => {
         sessionsToFullRefund[p].timestamp_parking_id,
         {
           "status": "completed_refund",
-          "timestamp": now,
+          "timestamp": now.utcOffset(8).format(),
           "amount": chargeFullRefunded.amount
         }
       );
