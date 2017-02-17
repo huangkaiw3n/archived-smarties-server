@@ -142,8 +142,12 @@ server.post('/v1/parkcar', async (req, res) => {
 
   let sessionCreatedTimestamp = nowFormatted();
 
+  let parkingDate = moment().utcOffset(8).format('YYYY-MM-DD');
+
   let parkingSession = {
-    date_carpark_code: `${moment().utcOffset(8).format('YYYY-MM-DD')}_${data.carpark_code}`,
+    date_carpark_code: `${parkingDate}_${data.carpark_code}`,
+    date: parkingDate,
+    carpark_code: data.carpark_code,
     timestamp_parking_id: `${sessionCreatedTimestamp}_${ulid()}`,
     license_plate: data.license_plate,
     vehicle_type: data.vehicle_type,
@@ -297,7 +301,7 @@ server.post('/v1/stopparking', async (req, res) => {
     return res.json(401, { message: 'Invalid jwt provided'});
   }
 
-  let carparkCode = jwtParkingSessions[0]['date_carpark_code'].split("_")[1];
+  let carparkCode = jwtParkingSessions[0]['carpark_code'];
   let carpark = _.find(smartiesUraCarparks, (cp) => cp.carpark_code === carparkCode);
   let parkingType = _.find(carpark["parking_types"], (pt) => pt.vehicle_type === jwtParkingSessions[0]['vehicle_type']);
   let rateCodesApplied = _.filter(smartiesUraCarparkRates, (r) => parkingType.rate_code.includes(r.rate_code))
