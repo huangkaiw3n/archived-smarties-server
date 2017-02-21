@@ -334,6 +334,8 @@ server.post('/v1/stopparking', async (req, res) => {
     return res.json(401, { message: 'Invalid jwt provided'});
   }
 
+  console.log(`Sessions: ${jwtParkingSessions}`)
+
   let carparkCode = jwtParkingSessions[0]['carpark_code'];
   let carpark = _.find(smartiesUraCarparks, (cp) => cp.carpark_code === carparkCode);
   let parkingType = _.find(carpark["parking_types"], (pt) => pt.vehicle_type === jwtParkingSessions[0]['vehicle_type']);
