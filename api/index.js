@@ -76,8 +76,8 @@ server.post('/v1/parkcar', async (req, res) => {
   }
 
   if (!carpark) {
-      return res.json(409, {
-        message: `Carpark ${data.carpark_code} not found`
+    return res.json(409, {
+      message: `Carpark ${data.carpark_code} not found`
     });
   }
 
@@ -102,20 +102,53 @@ server.post('/v1/parkcar', async (req, res) => {
   // Take the start parking time to be Date.now() if no jwt provided.
   // Else, take the start parking time to be the end time of the last parking session in the jwt
   let startTimestamp;
+  let parkingDuration;
+  let paidAmount = null;
 
   if (!jwtParkingSessions) {
     startTimestamp = moment();
+    parkingDuration = data.duration * 60000;
   } else {
-    startTimestamp = moment(jwtParkingSessions[jwtParkingSessions.length - 1]['end_timestamp']);
+    console.log("Extension");
+    startTimestamp = moment(jwtParkingSessions[0]['start_timestamp']);
+    let endTimestamp = moment(jwtParkingSessions[jwtParkingSessions.length - 1]['end_timestamp']);
+    let paidDuration = endTimestamp - startTimestamp;
+    parkingDuration = paidDuration + (data.duration * 60000);
+
+    paidAmount = utils.calculateParkingSession(
+                   startTimestamp,
+                   paidDuration,
+                   _.filter(smartiesUraCarparkRates, (r) => parkingType.rate_code.includes(r.rate_code)),
+                   _.get(carpark, 'day_cap', null)
+                 )[3];
+    console.log(`Amount Already Paid: ${paidAmount}`);
   }
+
+  // let [startParkingMoment,
+  //      endParkingMoment,
+  //      chargedDuration,
+  //      totalPrice] = utils.calculateParkingSession(
+  //                      startTimestamp,
+  //                      data.duration * 60000,
+  //                      _.filter(smartiesUraCarparkRates, (r) => parkingType.rate_code.includes(r.rate_code)),
+  //                      _.get(carpark, 'day_cap', null)
+  //                    );
 
   let [startParkingMoment,
        endParkingMoment,
        chargedDuration,
        totalPrice] = utils.calculateParkingSession(
                        startTimestamp,
-                       data.duration * 60000,
-                       _.filter(smartiesUraCarparkRates, (r) => parkingType.rate_code.includes(r.rate_code)));
+                       parkingDuration,
+                       _.filter(smartiesUraCarparkRates, (r) => parkingType.rate_code.includes(r.rate_code)),
+                       _.get(carpark, 'day_cap', null)
+                     );
+
+  if (paidAmount) {
+    totalPrice = totalPrice - paidAmount;
+  }
+
+  console.log(`totalPrice: ${totalPrice}, paidAmount: ${paidAmount}`);
 
   // Means not allowed to park now
   if (chargedDuration === 0) {

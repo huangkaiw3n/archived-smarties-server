@@ -11,18 +11,18 @@ module.exports = {
       console.log("File " + filename + " written successfully. \n")
     });
   },
-  calculateParkingSession: (startTimestamp, duration, rate_codes) => {
+  calculateParkingSession: (startTimestamp, duration, rateCodes, dayCap) => {
     // Current algo does not take into account there are rates with overlapping blocks
     // 1. Find current moment belongs to which rate block?
     // 2. Find minimium of current moment + duration vs current block end time.
-    // 3. Take current moment to the minimium in 2 as the accountedDuration
+    // 3. Take time from current moment to 2. as the accountedDuration
     // 4. Calculate price based on rates for the accountedDuration
     // 5. Add price and accountedDuration to totalPrice and chargedDuration
     // 6. Repeat until either chargedDuration === duration or no rate block is found
-    // Return [chargedDuration, totalPrice]
 
     let chargedDuration = 0;
     let totalPrice = 0; //in cents!
+    let accumulatedDayPrice = 0;
 
     // TODO THIS IS CURRENT TIME HACK! TO REMOVE
     let now = startTimestamp;
@@ -32,11 +32,23 @@ module.exports = {
     let remainingDuration = duration;
     let currentMoment = moment(now);
 
-    while (chargedDuration < duration) {
+    let startDayBlock = moment(now).set({
+      "hour": '07',
+      "minute": '00',
+      second: '00',
+      millisecond: '000'
+    });
+
+    if (now < startDayBlock) { // this accounts if now is AM
+      startDayBlock.subtract(1, 'days');
+    }
+    let endDayBlock = moment(startDayBlock).add(1, 'days');
+
+    while (remainingDuration > 0) {
       let currentRateDay = currentMoment.isoWeekday();
       let rateBlockStart;
       let rateBlockEnd;
-      let currentRateBlock = _(rate_codes).filter((r) => currentRateDay >= r.start_day_of_week && currentRateDay <= r.end_day_of_week)
+      let currentRateBlock = _(rateCodes).filter((r) => currentRateDay >= r.start_day_of_week && currentRateDay <= r.end_day_of_week)
                                           .find((r) => {
                                             let [start_hour, start_minute] = r.start_time.split(':');
                                             let [end_hour, end_minute] = r.end_time.split(':');
@@ -44,6 +56,8 @@ module.exports = {
                                             rateBlockStart = moment(currentMoment).set({
                                               "hour": start_hour,
                                               "minute": start_minute,
+                                              second: '00',
+                                              millisecond: '000'
                                             });
                                             rateBlockEnd = moment(currentMoment).set({
                                               "hour": end_hour,
@@ -66,7 +80,6 @@ module.exports = {
       if (!currentRateBlock) break;
       let currentRateInCentsPerMin = currentRateBlock.parking_block_duration ?
                               currentRateBlock.parking_rate * 100 / currentRateBlock.parking_block_duration : 0;
-      console.log(`currentRateInCentsPerMin: ${currentRateInCentsPerMin}`);
       let accountedDuration = _.min([
                               moment(currentMoment).add(remainingDuration),
                               rateBlockEnd
@@ -75,14 +88,26 @@ module.exports = {
       if (currentRateBlock.price_cap && accountedPrice > currentRateBlock.price_cap * 100) {
         accountedPrice = currentRateBlock.price_cap * 100;
       }
-      totalPrice = totalPrice + accountedPrice;
-      console.log(`totalPrice: ${totalPrice}`);
+      accumulatedDayPrice = accumulatedDayPrice + accountedPrice;
       chargedDuration = chargedDuration + accountedDuration;
-      console.log(`chargedDuration: ${chargedDuration}`);
-      if (chargedDuration === duration) break;
-
       currentMoment.add(accountedDuration);
       remainingDuration = remainingDuration - accountedDuration;
+
+      if (dayCap && currentMoment >= endDayBlock) {
+        totalPrice = totalPrice + _.min([accumulatedDayPrice, dayCap * 100]);
+        accumulatedDayPrice = 0;
+        startDayBlock.add(1, 'days');
+        endDayBlock.add(1, 'days');
+      }
+      console.log(`accumulatedDayPrice: ${accumulatedDayPrice}`);
+      console.log(`chargedDuration: ${chargedDuration}`);
+      console.log(`totalPrice: ${totalPrice}`);
+    }
+
+    if (dayCap) {
+      totalPrice = totalPrice + _.min([accumulatedDayPrice, dayCap * 100]);
+    } else {
+      totalPrice = totalPrice + accumulatedDayPrice;
     }
     return [startMoment, endMoment.add(chargedDuration), chargedDuration, Math.ceil(totalPrice)];
   }
