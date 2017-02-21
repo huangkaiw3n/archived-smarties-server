@@ -1728,6 +1728,42 @@
     "parking_rate": 0.6
   },
   {
+    "rate_code": "01B9G3BZ6GZ9EPP282NW8CJM67",
+    "timestamp": "1487672975507",
+    "ref_rate_code": "H21",
+    "start_time": "22:00",
+    "end_time": "08:30",
+    "start_day_of_week": 1,
+    "end_day_of_week": 5,
+    "parking_time_type": "ovenight",
+    "parking_block_duration": 0,
+    "parking_rate": 0
+  },
+  {
+    "rate_code": "01B9G3C3SRNW7458JT20QMVB7V",
+    "timestamp": "1487672975507",
+    "ref_rate_code": "H21",
+    "start_time": "22:00",
+    "end_time": "08:30",
+    "start_day_of_week": 6,
+    "end_day_of_week": 6,
+    "parking_time_type": "ovenight",
+    "parking_block_duration": 0,
+    "parking_rate": 0
+  },
+  {
+    "rate_code": "01B9G3C5K03DHJ0KGHVRMGZ88P",
+    "timestamp": "1487672975507",
+    "ref_rate_code": "H21",
+    "start_time": "22:00",
+    "end_time": "08:30",
+    "start_day_of_week": 7,
+    "end_day_of_week": 7,
+    "parking_time_type": "ovenight",
+    "parking_block_duration": 0,
+    "parking_rate": 0
+  },
+  {
     "rate_code": "01B79TPNDE43BC1QD5DM3KGP5M",
     "timestamp": "1485314938286",
     "ref_rate_code": "H22",

@@ -13317,10 +13317,14 @@
           "01B79TPNDDFRMBDBQG74STJSF0",
           "01B79TPNDD1Y6HWVBVJP52AJM7",
           "01B79TPNDDGKTKSPWXC8VQMP12",
-          "01B79TPNDDF7882W748T9ANENX"
+          "01B79TPNDDF7882W748T9ANENX",
+          "01B9G3BZ6GZ9EPP282NW8CJM67",
+          "01B9G3C3SRNW7458JT20QMVB7V",
+          "01B9G3C5K03DHJ0KGHVRMGZ88P"
         ]
       }
-    ]
+    ],
+    "day_cap": 20
   },
   {
     "carpark_code": "M0055",
@@ -21495,7 +21499,8 @@
           "01B8A1XT0WN0SYCKEJ4K4ZR0EE"
         ]
       }
-    ]
+    ],
+    "day_cap": 12
   },
   {
     "carpark_code": "U0002",
