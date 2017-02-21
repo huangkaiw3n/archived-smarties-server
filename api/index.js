@@ -102,6 +102,7 @@ server.post('/v1/parkcar', async (req, res) => {
   // Take the start parking time to be Date.now() if no jwt provided.
   // Else, take the start parking time to be the end time of the last parking session in the jwt
   let startTimestamp;
+  let endTimestamp;
   let parkingDuration;
   let paidAmount = null;
 
@@ -111,7 +112,7 @@ server.post('/v1/parkcar', async (req, res) => {
   } else {
     console.log("Extension");
     startTimestamp = moment(jwtParkingSessions[0]['start_timestamp']);
-    let endTimestamp = moment(jwtParkingSessions[jwtParkingSessions.length - 1]['end_timestamp']);
+    endTimestamp = moment(jwtParkingSessions[jwtParkingSessions.length - 1]['end_timestamp']);
     let paidDuration = endTimestamp - startTimestamp;
     parkingDuration = paidDuration + (data.duration * 60000);
 
@@ -185,7 +186,7 @@ server.post('/v1/parkcar', async (req, res) => {
     license_plate: data.license_plate,
     vehicle_type: data.vehicle_type,
     lot_number: data.lot_number,
-    start_timestamp: startParkingMoment.utcOffset(8).format(),
+    start_timestamp: jwtParkingSessions ? endTimestamp.utcOffset(8).format() : startParkingMoment.utcOffset(8).format(),
     end_timestamp: endParkingMoment.utcOffset(8).format(),
     events: [{
       status: 'pending_payment',
