@@ -86,15 +86,15 @@ server.post('/v1/parkcar', async (req, res) => {
     (pt) => pt.vehicle_type === data.vehicle_type);
 
   if (!parkingType) {
-      return res.json(409, {
-        message: `${data.vehicle_type} not allowed in this carpark`
+    return res.json(409, {
+      message: `${data.vehicle_type} not allowed in this carpark`
     });
   }
 
   // Checking if rates present for given parking type
   if (parkingType.rate_code.length === 0) {
-      return res.json(409, {
-        message: `No rates for ${data.vehicle_type} found in this carpark`
+    return res.json(409, {
+      message: `No rates for ${data.vehicle_type} found in this carpark`
     });
   }
 
@@ -170,7 +170,7 @@ server.post('/v1/parkcar', async (req, res) => {
   // Means currently free parking
   if (totalPrice === 0) {
     return res.json(409, {
-      message: "Free parking available"
+      message: "Session must be at least 50 cents."
     });
   }
 
