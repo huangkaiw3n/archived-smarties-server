@@ -383,7 +383,14 @@ server.post('/v1/stopparking', async (req, res) => {
   let carpark = _.find(smartiesUraCarparks, (cp) => cp.carpark_code === carparkCode);
 
   if (!carpark) {
-    console.log(`Crit Error: ${JSON.stringify(jwtParkingSessions, null, 2)}`)
+    console.log(`Crit Error: ${JSON.stringify(jwtParkingSessions, null, 2)}`);
+    return res.json(409, {
+      error: {
+        message: 'Unfortunately, ending sessions created on the prior version are unsupported. ' +
+        'This will not affect any new parking sessions created on this version. ' +
+        'Kindly allow your current parking session to lapse and the issue will go away, thank you.'
+      }
+    });
   }
 
   let parkingType = _.find(carpark["parking_types"], (pt) => pt.vehicle_type === jwtParkingSessions[0]['vehicle_type']);
