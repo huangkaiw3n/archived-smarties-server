@@ -381,6 +381,11 @@ server.post('/v1/stopparking', async (req, res) => {
 
   let carparkCode = jwtParkingSessions[0]['carpark_code'];
   let carpark = _.find(smartiesUraCarparks, (cp) => cp.carpark_code === carparkCode);
+
+  if (!carpark) {
+    console.log(`Crit Error: ${JSON.stringify(jwtParkingSessions, null, 2)}`)
+  }
+
   let parkingType = _.find(carpark["parking_types"], (pt) => pt.vehicle_type === jwtParkingSessions[0]['vehicle_type']);
   let rateCodesApplied = _.filter(smartiesUraCarparkRates, (r) => parkingType.rate_code.includes(r.rate_code))
 
