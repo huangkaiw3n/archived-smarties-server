@@ -46,13 +46,25 @@ server.post('/v1/parkcar', async (req, res) => {
       jwtParkingSessions = decodedToken.parkingSessions;
     }
   } catch (err) {
-    return res.json(400, { message: 'Invalid jwt provided'});
+    return res.json(400,
+      {
+        error: {
+          message: 'Invalid jwt provided'
+        }
+      }
+    );
   }
 
   // validate the json body data
   var valid = validator.postParkCarValidator(data);
   if (!valid) {
-    return res.json(400, { message: 'Malformed params provided!' });
+    return res.json(400,
+      {
+        error: {
+          message: 'Malformed params provided!'
+        }
+      }
+    );
   }
 
   // Querying the carpark
@@ -76,9 +88,13 @@ server.post('/v1/parkcar', async (req, res) => {
   }
 
   if (!carpark) {
-    return res.json(409, {
-      message: `Carpark ${data.carpark_code} not found`
-    });
+    return res.json(409,
+      {
+        error: {
+          message: `Carpark ${data.carpark_code} not found`
+        }
+      }
+    );
   }
 
   // Checking if there is parking type available for given vehicle type
@@ -86,16 +102,24 @@ server.post('/v1/parkcar', async (req, res) => {
     (pt) => pt.vehicle_type === data.vehicle_type);
 
   if (!parkingType) {
-    return res.json(409, {
-      message: `${data.vehicle_type} not allowed in this carpark`
-    });
+    return res.json(409,
+      {
+        error: {
+          message: `${data.vehicle_type} not allowed in this carpark`
+        }
+      }
+    );
   }
 
   // Checking if rates present for given parking type
   if (parkingType.rate_code.length === 0) {
-    return res.json(409, {
-      message: `No rates for ${data.vehicle_type} found in this carpark`
-    });
+    return res.json(409,
+      {
+        error: {
+          message: `No rates for ${data.vehicle_type} found in this carpark`
+        }
+      }
+    );
   }
 
   // Calculate the parking session based on a specified start time.
@@ -153,25 +177,37 @@ server.post('/v1/parkcar', async (req, res) => {
 
   // Means not allowed to park now
   if (chargedDuration === 0) {
-    return res.json(409, {
-      message: "No short term parking at this time."
-    });
+    return res.json(409,
+      {
+        error: {
+          message: "No short term parking at this time."
+        }
+      }
+    );
   }
 
   // Price algo mismatch or timing differences
   let priceDiff = Math.abs(totalPrice - data.expectedPrice);
 
   if (priceDiff > 10) { //Allow price diff of 10 cents
-    return res.json(409, {
-      message: `Price calculation mismatch, Client Expected Price: ${data.expectedPrice}. Server Expected Price: ${totalPrice}`
-    });
+    return res.json(409,
+      {
+        error: {
+          message: `Price calculation mismatch, Client Expected Price: ${data.expectedPrice}. Server Expected Price: ${totalPrice}`
+        }
+      }
+    );
   }
 
   // Means currently free parking
   if (totalPrice === 0) {
-    return res.json(409, {
-      message: "Session must be at least 50 cents."
-    });
+    return res.json(409,
+      {
+        error: {
+          message: "Session must be at least 50 cents."
+        }
+      }
+    );
   }
 
   let sessionCreatedTimestamp = nowFormatted();
@@ -332,7 +368,13 @@ server.post('/v1/stopparking', async (req, res) => {
       jwtParkingSessions = decodedToken.parkingSessions;
     }
   } catch (err) {
-    return res.json(401, { message: 'Invalid jwt provided'});
+    return res.json(401,
+      {
+        error: {
+          message: 'Invalid jwt provided'
+        }
+      }
+    );
   }
 
   // console.log(`Sessions: ${JSON.stringify(jwtParkingSessions, undefined, 2)}`)
@@ -347,9 +389,13 @@ server.post('/v1/stopparking', async (req, res) => {
   let sessionsToFullRefund = _.filter(jwtParkingSessions, (session) => now <= moment(session.start_timestamp));
 
   if (!sessionToPartialRefund) {
-    return res.json(409, {
-      message: "No eligible refunds"
-    });
+    return res.json(409,
+      {
+        error: {
+          message: "No eligible refunds"
+        }
+      }
+    );
   }
 
   // Doing partial refund first
