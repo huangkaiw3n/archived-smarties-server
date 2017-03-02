@@ -139,10 +139,10 @@ server.post('/v1/parkings', (req, res) => {
 
   charge
     .then((response) => {
-      console.log('response from Stripe:', response)
+      res.json(200, response)
     })
     .catch((error) => {
-      console.log('error from Stripe:', error.raw)
+      res.json(500, error.raw)
     })
 
   // prepare a charge (commitment)
@@ -150,6 +150,11 @@ server.post('/v1/parkings', (req, res) => {
   // fulfil commitments
   // return signed token for parking
 })
+
+server.get(/.*/, restify.serveStatic({
+  directory: 'public',
+  default: 'index.html'
+}))
 
 server.listen(serverPort, () => {
   console.log('%s listening at %s', server.name, server.url)
