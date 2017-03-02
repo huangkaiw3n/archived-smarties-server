@@ -2,6 +2,7 @@
 const Promise = require('bluebird')
 const moment = require('moment')
 const JsonV = require('ajv')
+const uuid = require('uuid/v4')
 
 // For logging
 // const winston = require('winston')
@@ -19,8 +20,8 @@ const restify = require('restify')
 // const JWT_SECRET = process.env.STREETSMART_JWT_SECRET || 'H76jfjut2g6y9cjWDsFMpbfNRzV3m2iWvUk'
 
 // Stripe
-// const STRIPE_API_KEY = process.env.STREETSMART_STRIPE_API_KEY
-// const stripe = require('stripe')(STRIPE_API_KEY)
+const STRIPE_API_KEY = process.env.STREETSMART_STRIPE_API_KEY
+const stripe = require('stripe')(STRIPE_API_KEY)
 
 // DynamoDB
 const AWS = require('aws-sdk')
@@ -101,8 +102,7 @@ server.post('/v1/parkings', (req, res) => {
   // need to test licensePlate pattern functionality
 
   // get new instance of validator
-  const newParkingValidator = new JsonV()
-  newParkingValidator.compile(newParkingSchema)
+  const newParkingValidator = (new JsonV()).compile(newParkingSchema)
 
   // get body of POST request
   const payload = req.body
@@ -117,13 +117,33 @@ server.post('/v1/parkings', (req, res) => {
 
   // setup a new parking session
   const startTime = moment.utc()
-
   let parkingSession = getParkingSession(
     payload.carparkCode,
     payload.vehicleType,
     startTime,
     payload.duration
   )
+  const parkingSessionId = uuid()
+
+  // TODO: need to revisit this
+  const chargeParams = {
+    source: payload.stripeTokenId,
+    amount: parkingSession.cost,
+    currency: 'SGD',
+    capture: false,
+    description: parkingSessionId,
+    metadata: { parkingSessionId: parkingSessionId },
+    statement_descriptor: 'Street Smart Parking'
+  }
+  let charge = stripe.charges.create(chargeParams)
+
+  charge
+    .then((response) => {
+      console.log('response from Stripe:', response)
+    })
+    .catch((error) => {
+      console.log('error from Stripe:', error.raw)
+    })
 
   // prepare a charge (commitment)
   // write to dynamo
