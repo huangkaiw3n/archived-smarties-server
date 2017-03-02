@@ -3,6 +3,7 @@ const Promise = require('bluebird')
 const moment = require('moment')
 const JsonV = require('ajv')
 const uuid = require('uuid/v4')
+const _ = require('lodash')
 
 // For logging
 // const winston = require('winston')
@@ -16,8 +17,8 @@ const uuid = require('uuid/v4')
 const restify = require('restify')
 
 // JSON Web Token
-// const jwt = require('jsonwebtoken')
-// const JWT_SECRET = process.env.STREETSMART_JWT_SECRET || 'H76jfjut2g6y9cjWDsFMpbfNRzV3m2iWvUk'
+const jwt = require('jsonwebtoken')
+const JWT_SECRET = process.env.STREETSMART_JWT_SECRET || 'H76jfjut2g6y9cjWDsFMpbfNRzV3m2iWvUk'
 
 // Stripe
 const STRIPE_API_KEY = process.env.STREETSMART_STRIPE_API_KEY
@@ -48,7 +49,7 @@ function getParkingSession (carparkCode, vehicleType, startTime, duration) {
   return {
     startTime: startTime.format(),
     endTime: endTime.format(),
-    rateBlocks: [{
+    rates: [{
       rateId: 'abc123',
       version: 1,
       blockStartTime: startTime.format(),
@@ -68,7 +69,7 @@ server.post('/v1/parkings', (req, res) => {
       'licensePlate',
       'duration',
       'expectedPrice',
-      'stripeTokenId'
+      'stripeToken'
     ],
     properties: {
       carparkCode: {
@@ -94,7 +95,7 @@ server.post('/v1/parkings', (req, res) => {
         type: 'number',
         minimum: 0.0
       },
-      stripeTokenId: {
+      stripeToken: {
         type: 'string'
       }
     }
@@ -115,9 +116,14 @@ server.post('/v1/parkings', (req, res) => {
     return res.json(401, { message: 'Malformed params provided.' })
   }
 
+  // create logId from params
+  // TODO: need to  modify this
+  const logId = uuid()
+  const commitments = []
+
   // setup a new parking session
   const startTime = moment.utc()
-  let parkingSession = getParkingSession(
+  let parkingSessionParams = getParkingSession(
     payload.carparkCode,
     payload.vehicleType,
     startTime,
@@ -126,29 +132,117 @@ server.post('/v1/parkings', (req, res) => {
   const parkingSessionId = uuid()
 
   // TODO: need to revisit this
+  // prepare stripe charge
   const chargeParams = {
     source: payload.stripeTokenId,
-    amount: parkingSession.cost,
+    amount: parkingSessionParams.cost,
     currency: 'SGD',
     capture: false,
     description: parkingSessionId,
     metadata: { parkingSessionId: parkingSessionId },
     statement_descriptor: 'Street Smart Parking'
   }
-  let charge = stripe.charges.create(chargeParams)
 
-  charge
-    .then((response) => {
-      res.json(200, response)
+  // make stripe charge
+  let stripeCharge = stripe.charges.create(chargeParams)
+
+  // catch stripe charge error
+  stripeCharge.catch((error) => {
+    return res.json(500, {
+      message: 'error while making a stripe charge',
+      error_from_stripe: error.raw
     })
-    .catch((error) => {
-      res.json(500, error.raw)
+  })
+
+  // write parking session
+  let parkingSession = stripeCharge.then((charge) => {
+    // add charge to commitments
+    commitments.append({
+      type: 'stripeCharge',
+      charge: charge
     })
 
-  // prepare a charge (commitment)
-  // write to dynamo
-  // fulfil commitments
-  // return signed token for parking
+    // prepare db write
+    let putParams = {
+      TableName: 'streetsmart-parking',
+      Item: {
+        id: parkingSessionId,
+        version: 0,
+        location: payload.carparkCode,
+        session: {
+          startTime: parkingSessionParams.startTime,
+          endTime: parkingSessionParams.endTime,
+          rates: parkingSessionParams.rates
+        },
+        commitments: commitments,
+        cause: logId
+      }
+    }
+
+    // write to db
+    return docClient.putAsync(putParams)
+  })
+
+  // catch dynamodb error
+  parkingSession.catch((error) => {
+    // undo commitments
+    // only handle stripe charge for now
+    let undoStripeCharge = _.find(commitments, { type: stripeCharge })
+    if (undoStripeCharge) {
+      stripe
+        .refunds
+        .create({
+          charge: undoStripeCharge.charge.id,
+          amount: undoStripeCharge.charge.amount,
+          metadata: undoStripeCharge.charge.metadata,
+          reason: 'failed while creating parking session'
+        })
+        .then(() => {
+          return res.json(500, {
+            message: 'error while writing parking session to dynamodb',
+            error_from_dynamo: error
+          })
+        })
+        .catch((error) => {
+          return res.json(500, {
+            message: 'error while writing parking session to dynamodb. error while refunding a stripe charge',
+            error_from_stripe: error.raw
+          })
+        })
+    } else {
+      return res.json(500, {
+        message: 'error while writing parking session to dynamodb',
+        error_from_dynamo: error
+      })
+    }
+  })
+
+  // do commits
+  let commit = parkingSession.then(() => {
+    // commit commitments
+    // only handle stripe charge for now
+    let captureStripeCharge = _.find(commitments, { type: stripeCharge })
+    if (captureStripeCharge) {
+      stripe
+        .charges
+        .capture({
+          charge: captureStripeCharge.charge.id,
+          amount: captureStripeCharge.charge.amount
+        })
+        .then(() => {
+          return res.json(200, jwt.sign(parkingSessionId, JWT_SECRET))
+        })
+        .catch((error) => {
+          // TODO: rollback parking session
+          return res.json(500, {
+            message: 'error while capturing a stripe charge',
+            error_from_stripe: error.raw
+          })
+        })
+    } else {
+      return res.json(200, jwt.sign(parkingSessionId, JWT_SECRET))
+    }
+  })
 })
 
 server.get(/.*/, restify.serveStatic({
