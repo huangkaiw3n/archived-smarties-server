@@ -147,12 +147,10 @@ server.post('/v1/parkings', (req, res) => {
   let stripeCharge = stripe.charges.create(chargeParams)
 
   // catch stripe charge error
-  stripeCharge.catch((error) => {
-    return res.json(500, {
-      message: 'error while making a stripe charge',
-      error_from_stripe: error.raw
-    })
-  })
+  stripeCharge.catch((error) => res.json(500, {
+    message: 'error while making a stripe charge',
+    error_from_stripe: error.raw
+  }))
 
   // write parking session
   let parkingSession = stripeCharge.then((charge) => {
@@ -197,18 +195,14 @@ server.post('/v1/parkings', (req, res) => {
           metadata: undoStripeCharge.charge.metadata,
           reason: 'failed while creating parking session'
         })
-        .then(() => {
-          return res.json(500, {
-            message: 'error while writing parking session to dynamodb',
-            error_from_dynamo: error
-          })
-        })
-        .catch((error) => {
-          return res.json(500, {
-            message: 'error while writing parking session to dynamodb. error while refunding a stripe charge',
-            error_from_stripe: error.raw
-          })
-        })
+        .then(() => res.json(500, {
+          message: 'error while writing parking session to dynamodb',
+          error_from_dynamo: error
+        }))
+        .catch((error) => res.json(500, {
+          message: 'error while writing parking session to dynamodb. error while refunding a stripe charge',
+          error_from_stripe: error.raw
+        }))
     } else {
       return res.json(500, {
         message: 'error while writing parking session to dynamodb',
@@ -223,26 +217,27 @@ server.post('/v1/parkings', (req, res) => {
     // only handle stripe charge for now
     let captureStripeCharge = _.find(commitments, { type: stripeCharge })
     if (captureStripeCharge) {
-      stripe
+      return stripe
         .charges
         .capture({
           charge: captureStripeCharge.charge.id,
           amount: captureStripeCharge.charge.amount
         })
-        .then(() => {
-          return res.json(200, jwt.sign(parkingSessionId, JWT_SECRET))
-        })
-        .catch((error) => {
-          // TODO: rollback parking session
-          return res.json(500, {
-            message: 'error while capturing a stripe charge',
-            error_from_stripe: error.raw
-          })
-        })
+        .then(() => jwt.sign(parkingSessionId, JWT_SECRET))
     } else {
-      return res.json(200, jwt.sign(parkingSessionId, JWT_SECRET))
+      return jwt.sign(parkingSessionId, JWT_SECRET)
     }
   })
+
+  commit
+    .then((token) => res.json(200, token))
+    .catch((error) => {
+      // TODO: rollback parking session
+      return res.json(500, {
+        message: 'error while capturing a stripe charge',
+        error_from_stripe: error.raw
+      })
+    })
 })
 
 server.get(/.*/, restify.serveStatic({
