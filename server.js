@@ -6,12 +6,16 @@ const uuid = require('uuid/v4')
 const _ = require('lodash')
 
 // For logging
-// const winston = require('winston')
-// const logger = new (winston.Logger)({
-//   transports: [
-//     new (winston.transports.Console)({ json: true, stringify: true })
-//   ]
-// })
+const winston = require('winston')
+const logger = new (winston.Logger)({
+  transports: [
+    new (winston.transports.Console)({
+      json: true,
+      stringify: true,
+      colorize: true
+    })
+  ]
+})
 
 // Based on express, but for building for REST APIs
 const restify = require('restify')
@@ -44,6 +48,21 @@ server.use(restify.queryParser())
 server.use(restify.bodyParser())
 server.use(restify.gzipResponse())
 
+class Log {
+  constructor (height, width) {
+    // get a unique log id
+    this.id = uuid()
+  }
+
+  info (event, metadata) {
+    logger.info(event, { logId: this.id, metadata: metadata })
+  }
+
+  error (event, metadata) {
+    logger.error(event, { logId: this.id, metadata: metadata })
+  }
+}
+
 function getParkingSession (carparkCode, vehicleType, startTime, duration) {
   let endTime = moment.utc(startTime).add(duration, 'minutes')
   return {
@@ -60,6 +79,13 @@ function getParkingSession (carparkCode, vehicleType, startTime, duration) {
 }
 
 server.post('/v1/parkings', (req, res) => {
+  const log = new Log()
+
+  // get body of POST request
+  const payload = req.body
+
+  log.info('new parking session request', payload)
+
   // schema for the json body of a new parking request
   const newParkingSchema = {
     type: 'object',
@@ -105,20 +131,15 @@ server.post('/v1/parkings', (req, res) => {
   // get new instance of validator
   const newParkingValidator = (new JsonV()).compile(newParkingSchema)
 
-  // get body of POST request
-  const payload = req.body
-
   // validate the payload
   const payloadIsValid = newParkingValidator(payload)
 
   // return error if invalid
   if (!payloadIsValid) {
+    log.error('invalid params for new parking request', newParkingValidator.errors)
     return res.json(401, { message: 'Malformed params provided.' })
   }
 
-  // create logId from params
-  // TODO: need to  modify this
-  const logId = uuid()
   const commitments = []
 
   // setup a new parking session
@@ -143,17 +164,24 @@ server.post('/v1/parkings', (req, res) => {
     statement_descriptor: 'Street Smart Parking'
   }
 
+  log.info('creating new stripe charge', chargeParams)
+
   // make stripe charge
   let stripeCharge = stripe.charges.create(chargeParams)
 
   // catch stripe charge error
-  stripeCharge.catch((error) => res.json(500, {
-    message: 'error while making a stripe charge',
-    error_from_stripe: error.raw
-  }))
+  stripeCharge.catch((error) => {
+    log.error('error while making a stripe charge', error.raw)
+
+    return res.json(500, {
+      message: 'error while making a stripe charge'
+    })
+  })
 
   // write parking session
   let parkingSession = stripeCharge.then((charge) => {
+    log.info('stripe charge created', charge)
+
     // add charge to commitments
     commitments.append({
       type: 'stripeCharge',
@@ -173,9 +201,11 @@ server.post('/v1/parkings', (req, res) => {
           rates: parkingSessionParams.rates
         },
         commitments: commitments,
-        cause: logId
+        cause: log.id
       }
     }
+
+    log.info('creating new parking session', putParams)
 
     // write to db
     return docClient.putAsync(putParams)
@@ -183,26 +213,40 @@ server.post('/v1/parkings', (req, res) => {
 
   // catch dynamodb error
   parkingSession.catch((error) => {
+    log.error('error while writing parking session to dynamodb', error)
+
     // undo commitments
     // only handle stripe charge for now
     let undoStripeCharge = _.find(commitments, { type: stripeCharge })
     if (undoStripeCharge) {
+      let undoParams = {
+        charge: undoStripeCharge.charge.id,
+        amount: undoStripeCharge.charge.amount,
+        metadata: undoStripeCharge.charge.metadata,
+        reason: 'failed while creating parking session'
+      }
+
+      log.info('creating refund for stripe charge', undoParams)
+
       stripe
         .refunds
-        .create({
-          charge: undoStripeCharge.charge.id,
-          amount: undoStripeCharge.charge.amount,
-          metadata: undoStripeCharge.charge.metadata,
-          reason: 'failed while creating parking session'
+        .create(undoParams)
+        .then((refund) => {
+          log.info('stripe charge refunded', refund)
+
+          return res.json(500, {
+            message: 'error while writing parking session to dynamodb',
+            error_from_dynamo: error
+          })
         })
-        .then(() => res.json(500, {
-          message: 'error while writing parking session to dynamodb',
-          error_from_dynamo: error
-        }))
-        .catch((error) => res.json(500, {
-          message: 'error while writing parking session to dynamodb. error while refunding a stripe charge',
-          error_from_stripe: error.raw
-        }))
+        .catch((error) => {
+          log.error('error while refunding the stripe charge', error.raw)
+
+          return res.json(500, {
+            message: 'error while writing parking session to dynamodb. error while refunding a stripe charge',
+            error_from_stripe: error.raw
+          })
+        })
     } else {
       return res.json(500, {
         message: 'error while writing parking session to dynamodb',
@@ -212,32 +256,56 @@ server.post('/v1/parkings', (req, res) => {
   })
 
   // do commits
-  let commit = parkingSession.then(() => {
+  let commit = parkingSession.then((dynamoDbResponse) => {
+    log.info('new parking session created', dynamoDbResponse)
+
     // commit commitments
     // only handle stripe charge for now
     let captureStripeCharge = _.find(commitments, { type: stripeCharge })
     if (captureStripeCharge) {
+      let captureParams = {
+        charge: captureStripeCharge.charge.id,
+        amount: captureStripeCharge.charge.amount
+      }
+
+      log.info('capturing stripe charge', captureParams)
+
       return stripe
         .charges
-        .capture({
-          charge: captureStripeCharge.charge.id,
-          amount: captureStripeCharge.charge.amount
+        .capture(captureParams)
+        .then((capture) => {
+          log.info('stripe charge captured', capture)
+
+          return jwt.sign(parkingSessionId, JWT_SECRET)
         })
-        .then(() => jwt.sign(parkingSessionId, JWT_SECRET))
     } else {
       return jwt.sign(parkingSessionId, JWT_SECRET)
     }
   })
 
   commit
-    .then((token) => res.json(200, token))
+    .then((token) => {
+      log.info('sending jwt for parking session to client', token)
+      log.info('end', {})
+
+      return res.json(200, token)
+    })
     .catch((error) => {
       // TODO: rollback parking session
+      log.error('error while capturing a stripe charge', error.raw)
+      log.info('end', {})
+
       return res.json(500, {
         message: 'error while capturing a stripe charge',
         error_from_stripe: error.raw
       })
     })
+})
+
+server.post('/v1/parkings/:parkingId/extend', (req, res) => {
+})
+
+server.post('/v1/parkings/:parkingId/end', (req, res) => {
 })
 
 server.get(/.*/, restify.serveStatic({
