@@ -27,6 +27,7 @@ exports.getCarpark = (carparkCode) => {
 }
 
 exports.putParkingSession = (parkingSession) => {
+  console.log("Inserting into table", process.env.SMARTIES_PARKING_SESSIONS_TABLE)
   return docClient.putAsync({
     TableName : process.env.SMARTIES_PARKING_SESSIONS_TABLE,
     Item: parkingSession
